@@ -1,7 +1,7 @@
 // components/auth/LoginForm.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -12,7 +12,8 @@ interface AuthError {
   status?: number;
 }
 
-export default function LoginForm() {
+// Komponen yang menggunakan useSearchParams
+function LoginFormContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get('callbackUrl') || '/dashboard';
@@ -170,5 +171,32 @@ export default function LoginForm() {
         </Link>
       </div>
     </div>
+  );
+}
+
+// Wrapper component with Suspense
+export default function LoginForm() {
+  return (
+    <Suspense fallback={
+      <div className="w-full max-w-md p-8 space-y-8 bg-white rounded-lg shadow-md">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold">Sign in to your account</h1>
+          <div className="w-full h-4 mt-4 bg-gray-200 rounded animate-pulse"></div>
+        </div>
+        <div className="space-y-6">
+          <div className="space-y-2">
+            <div className="w-24 h-4 bg-gray-200 rounded animate-pulse"></div>
+            <div className="w-full h-10 bg-gray-200 rounded animate-pulse"></div>
+          </div>
+          <div className="space-y-2">
+            <div className="w-24 h-4 bg-gray-200 rounded animate-pulse"></div>
+            <div className="w-full h-10 bg-gray-200 rounded animate-pulse"></div>
+          </div>
+          <div className="w-full h-10 bg-gray-200 rounded animate-pulse"></div>
+        </div>
+      </div>
+    }>
+      <LoginFormContent />
+    </Suspense>
   );
 }

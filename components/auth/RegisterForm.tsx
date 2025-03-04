@@ -1,13 +1,13 @@
 // components/auth/RegisterForm.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Link from 'next/link';
 import { signIn } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 interface ApiError {
   message?: string;
@@ -23,11 +23,14 @@ const registerSchema = z.object({
 
 type RegisterFormData = z.infer<typeof registerSchema>;
 
-export default function RegisterForm() {
+// Content component using useSearchParams
+function RegisterFormContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get('callbackUrl') || '/dashboard';
   
   const { register, handleSubmit, formState: { errors } } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
@@ -76,7 +79,7 @@ export default function RegisterForm() {
     setError(null);
     
     try {
-      await signIn('google', { callbackUrl: '/dashboard' });
+      await signIn('google', { callbackUrl });
     } catch (error: unknown) {
       const typedError = error as ApiError;
       setError(typedError.error || typedError.message || 'Failed to sign in with Google');
@@ -193,3 +196,34 @@ export default function RegisterForm() {
     </div>
   );
 }
+
+// Wrapper component with Suspense
+export default function RegisterForm() {
+    return (
+      <Suspense fallback={
+        <div className="w-full max-w-md p-8 space-y-8 bg-white rounded-lg shadow-md">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold">Create an Account</h1>
+            <div className="w-full h-4 mt-4 bg-gray-200 rounded animate-pulse"></div>
+          </div>
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <div className="w-24 h-4 bg-gray-200 rounded animate-pulse"></div>
+              <div className="w-full h-10 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+            <div className="space-y-2">
+              <div className="w-24 h-4 bg-gray-200 rounded animate-pulse"></div>
+              <div className="w-full h-10 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+            <div className="space-y-2">
+              <div className="w-24 h-4 bg-gray-200 rounded animate-pulse"></div>
+              <div className="w-full h-10 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+            <div className="w-full h-10 bg-gray-200 rounded animate-pulse"></div>
+          </div>
+        </div>
+      }>
+        <RegisterFormContent />
+      </Suspense>
+    );
+  }
