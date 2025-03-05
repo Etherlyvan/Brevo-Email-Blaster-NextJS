@@ -60,19 +60,25 @@ export default function SmtpDeleteButton({
         <FiTrash2 className={`w-${iconSize} h-${iconSize}`} />
       </button>
       
-      {/* Confirmation Modal */}
+      {/* Improved Modal with Text Overflow Handling */}
       {showConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="p-6 bg-white rounded-lg shadow-xl max-w-md">
-            <h3 className="text-lg font-medium text-gray-900">Confirm Delete</h3>
-            <p className="mt-2 text-sm text-gray-500">
-              Are you sure you want to delete the SMTP configuration &quot;{smtpName}&quot;? This action cannot be undone.
-            </p>
-            <div className="flex justify-end mt-4 space-x-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden">
+            <div className="p-5 border-b border-gray-200">
+              <h3 className="text-lg font-medium text-gray-900">Confirm Delete</h3>
+            </div>
+            
+            <div className="p-5">
+              <p className="text-sm text-gray-500 overflow-hidden overflow-wrap-anywhere">
+                Are you sure you want to delete the SMTP configuration &quot;<span className="font-medium text-gray-700 break-all">{smtpName}</span>&quot;? This action cannot be undone.
+              </p>
+            </div>
+            
+            <div className="px-5 py-4 bg-gray-50 flex justify-end space-x-3">
               <button
                 type="button"
                 onClick={() => setShowConfirm(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50"
                 disabled={isDeleting}
               >
                 Cancel
@@ -80,7 +86,7 @@ export default function SmtpDeleteButton({
               <button
                 type="button"
                 onClick={handleDelete}
-                className="flex items-center px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700"
+                className="flex items-center px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
                 disabled={isDeleting}
               >
                 {isDeleting ? (
