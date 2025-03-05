@@ -6,12 +6,11 @@ import { prisma } from '@/lib/db';
 import Header from '@/components/dashboard/Header';
 import TemplateEditor from '@/components/email/TemplateEditor';
 
-interface EditTemplatePageProps {
-  params: Promise<{ id: string }>;  // Updated to use Promise type
-}
 
-export default async function EditTemplatePage({ params }: Readonly<EditTemplatePageProps>) {
-  const { id } = await params;  // Await the params Promise
+type Params = Promise<{ id: string }>;  // Updated to 
+
+export default async function EditTemplatePage( props :{ params : Params }) {
+  const { id } = await props.params;  // Await the params Promise
   const session = await getServerSession(authOptions);
   
   if (!session?.user?.id) {
