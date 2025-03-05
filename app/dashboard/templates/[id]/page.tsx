@@ -6,13 +6,12 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import Header from '@/components/dashboard/Header';
 import TemplateViewer from '@/components/email/TemplateViewer';
+import DeleteTemplateButton from '@/components/email/DeleteTemplateButton';
 
-interface TemplatePageProps {
-  params: Promise<{ id: string }>;  // Updated to match API route
-}
+type Params = Promise<{ id: string }>;
 
-export default async function TemplatePage({ params }: TemplatePageProps) {
-  const { id } = await params;  // Await the params Promise
+export default async function TemplatePage({ params }: { params: Params }) {
+  const { id } = await params;
   const session = await getServerSession(authOptions);
   
   if (!session?.user?.id) {
