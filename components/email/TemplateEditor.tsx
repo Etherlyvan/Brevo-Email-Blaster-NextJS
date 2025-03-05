@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import CustomEditor from './CustomEditor';
 import { extractTemplateParameters } from '@/lib/utils';
 
-// Define proper error types
 interface ApiError {
   message?: string;
   error?: string;
@@ -32,10 +31,8 @@ export default function TemplateEditor({ template }: Readonly<TemplateEditorProp
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
-  
-  // Add state for HTML code view
-  const [showHtmlCode, setShowHtmlCode] = useState(false);
-  const [htmlCodeInput, setHtmlCodeInput] = useState('');
+  const [activeTab, setActiveTab] = useState<'visual' | 'html'>('visual');
+  const [htmlSource, setHtmlSource] = useState('');
   
   // Example values for preview
   const exampleValues = useRef({
@@ -49,35 +46,39 @@ export default function TemplateEditor({ template }: Readonly<TemplateEditorProp
       setName(template.name ?? '');
       setSubject(template.subject ?? '');
       setHtmlContent(template.htmlContent ?? '');
-      setHtmlCodeInput(template.htmlContent ?? '');
+      setHtmlSource(template.htmlContent ?? '');
       setParameters(template.parameters ?? []);
     }
   }, [template]);
   
-  // Sync HTML content between visual editor and code editor
+  // Sync visual editor content to HTML source when in visual mode
   useEffect(() => {
-    if (!showHtmlCode) {
-      setHtmlCodeInput(htmlContent);
+    if (activeTab === 'visual') {
+      setHtmlSource(htmlContent);
     }
-  }, [htmlContent, showHtmlCode]);
+  }, [htmlContent, activeTab]);
   
-  // Update parameters when HTML content changes
+  // Update parameters when HTML content or subject changes
   useEffect(() => {
-    if (htmlContent || subject) {
-      const extractedParams = extractTemplateParameters(htmlContent);
-      // Also check subject for parameters
+    const content = activeTab === 'visual' ? htmlContent : htmlSource;
+    
+    if (content || subject) {
+      const extractedParams = extractTemplateParameters(content);
       const subjectParams = extractTemplateParameters(subject);
       
       // Combine parameters from both sources
       const allParams = [...new Set([...extractedParams, ...subjectParams])];
       setParameters(allParams);
     }
-  }, [htmlContent, subject]);
+  }, [htmlContent, htmlSource, subject, activeTab]);
   
-  // Apply HTML code from the code editor to the visual editor
-  const applyHtmlCode = () => {
-    setHtmlContent(htmlCodeInput);
-    setShowHtmlCode(false);
+  // Apply HTML source changes to visual editor when switching tabs
+  const handleTabChange = (tab: 'visual' | 'html') => {
+    if (tab === 'visual' && activeTab === 'html') {
+      // Switching from HTML to Visual - update visual editor content
+      setHtmlContent(htmlSource);
+    }
+    setActiveTab(tab);
   };
   
   const handleSubmit = async (e: React.FormEvent) => {
@@ -86,20 +87,23 @@ export default function TemplateEditor({ template }: Readonly<TemplateEditorProp
     setIsLoading(true);
     
     try {
-      if (!name || !subject || !htmlContent) {
+      // Get the final HTML content based on active tab
+      const finalHtmlContent = activeTab === 'visual' ? htmlContent : htmlSource;
+      
+      if (!name || !subject || !finalHtmlContent) {
         throw new Error('Please fill in all required fields');
       }
       
-      const response = await fetch('/api/email/template', {
+      const response = await fetch('/api/templates', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          id: template?.id, // Include ID if editing
+          id: template?.id,
           name,
           subject,
-          htmlContent: showHtmlCode ? htmlCodeInput : htmlContent, // Use HTML code if in code view
+          htmlContent: finalHtmlContent,
           parameters,
         }),
       });
@@ -110,11 +114,9 @@ export default function TemplateEditor({ template }: Readonly<TemplateEditorProp
         throw new Error(data.error ?? 'Failed to save template');
       }
       
-      // Navigate directly
       router.push('/dashboard/templates');
       router.refresh();
     } catch (errorObj: unknown) {
-      // Type-safe error handling
       const typedError = errorObj as Error | ApiError;
       const errorMessage = 
         typeof typedError === 'object' && typedError !== null
@@ -129,7 +131,8 @@ export default function TemplateEditor({ template }: Readonly<TemplateEditorProp
   
   // Generate a preview of the template with example values
   const getPreviewHtml = () => {
-    const content = showHtmlCode ? htmlCodeInput : htmlContent;
+    // Use the appropriate HTML content based on the active tab
+    const content = activeTab === 'visual' ? htmlContent : htmlSource;
     let preview = content;
     
     // Replace each parameter with an example value
@@ -220,7 +223,7 @@ export default function TemplateEditor({ template }: Readonly<TemplateEditorProp
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="block w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             placeholder="e.g., Welcome Email"
             required
           />
@@ -235,55 +238,56 @@ export default function TemplateEditor({ template }: Readonly<TemplateEditorProp
             type="text"
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
-            className="block w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             placeholder="e.g., Welcome to {{company}}, {{name}}!"
             required
           />
         </div>
         
         <div>
-          <div className="flex items-center justify-between mb-2">
-            <label htmlFor="editor" className="block text-sm font-medium text-gray-700">
-              Email Content *
-            </label>
-            <div className="flex items-center space-x-2">
-              <button
-                type="button"
-                onClick={() => setShowHtmlCode(!showHtmlCode)}
-                className="px-3 py-1 text-xs font-medium text-blue-600 bg-blue-100 rounded-md hover:bg-blue-200"
-              >
-                {showHtmlCode ? 'Visual Editor' : 'HTML Code'}
-              </button>
-              
-              {showHtmlCode && (
-                <button
-                  type="button"
-                  onClick={applyHtmlCode}
-                  className="px-3 py-1 text-xs font-medium text-green-600 bg-green-100 rounded-md hover:bg-green-200"
-                >
-                  Apply HTML
-                </button>
-              )}
-            </div>
+          <label htmlFor="editor" className="block text-sm font-medium text-gray-700">
+            Email Content *
+          </label>
+          
+          {/* Editor Tabs */}
+          <div className="flex border-b border-gray-200 mt-2">
+            <button
+              type="button"
+              className={`py-2 px-4 text-sm font-medium ${activeTab === 'visual' 
+                ? 'text-blue-600 border-b-2 border-blue-600' 
+                : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+              onClick={() => handleTabChange('visual')}
+            >
+              Visual Editor
+            </button>
+            <button
+              type="button"
+              className={`py-2 px-4 text-sm font-medium ${activeTab === 'html' 
+                ? 'text-blue-600 border-b-2 border-blue-600' 
+                : 'text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+              onClick={() => handleTabChange('html')}
+            >
+              HTML Source
+            </button>
           </div>
           
-          <div className="mt-1">
-            {showHtmlCode ? (
-              <div className="border border-gray-300 rounded-md">
-                <textarea
-                  value={htmlCodeInput}
-                  onChange={(e) => setHtmlCodeInput(e.target.value)}
-                  className="w-full h-64 p-3 font-mono text-sm border-0 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="<p>Enter your HTML code here...</p>"
-                />
-              </div>
-            ) : (
+          <div className="mt-2">
+            {activeTab === 'visual' ? (
               <CustomEditor
                 value={htmlContent}
                 onChange={setHtmlContent}
                 className="bg-white rounded-md"
                 placeholder="Write your email content here... Use {{parameter}} for dynamic content."
               />
+            ) : (
+              <div className="border border-gray-300 rounded-md overflow-hidden">
+                <textarea
+                  value={htmlSource}
+                  onChange={(e) => setHtmlSource(e.target.value)}
+                  className="w-full min-h-[300px] p-4 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter HTML code here... Use {{parameter}} for dynamic content."
+                />
+              </div>
             )}
           </div>
         </div>
@@ -335,7 +339,7 @@ export default function TemplateEditor({ template }: Readonly<TemplateEditorProp
             disabled={isLoading}
             className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
           >
-            {isLoading ? 'Saving...' : 'Save Template'}
+            {isLoading ? 'Saving...' : template?.id ? 'Update Template' : 'Create Template'}
           </button>
         </div>
       </form>

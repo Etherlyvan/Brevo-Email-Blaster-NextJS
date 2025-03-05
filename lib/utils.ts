@@ -197,3 +197,5 @@ export function validateEmail(email: string): boolean {
   export function sanitizeEmail(email: string): string {
     return email.replace(/[^\x00-\x7F]/g, '');
   }
+
+  // lib/utils.ts (tambahkan jika belum ada)

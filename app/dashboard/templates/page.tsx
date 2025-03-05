@@ -84,12 +84,13 @@ export default async function TemplatesPage() {
                       </div>
                     </div>
                     <div className="flex mt-6 space-x-3">
-                      <Link
-                        href={`/dashboard/templates/${template.id}`}
-                        className="text-sm font-medium text-blue-600 hover:text-blue-500"
-                      >
-                        View
-                      </Link>
+
+                    <Link
+                      href={`/dashboard/templates/${template.id}`} // Ini benar
+                      className="text-sm font-medium text-blue-600 hover:text-blue-500"
+                    >
+                      View
+                    </Link>
                       <Link
                         href={`/dashboard/campaigns/create?templateId=${template.id}`}
                         className="text-sm font-medium text-green-600 hover:text-green-500"

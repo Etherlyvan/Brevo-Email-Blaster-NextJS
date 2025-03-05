@@ -17,34 +17,165 @@ export default function CustomEditor({
   className = ''
 }: CustomEditorProps) {
   const [isMounted, setIsMounted] = useState(false);
-  const editorRef = useRef<HTMLDivElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
   
-  // Update the editor content when the value prop changes
-  useEffect(() => {
-    if (editorRef.current && editorRef.current.innerHTML !== value) {
-      editorRef.current.innerHTML = value;
-    }
-  }, [value]);
-  
+  // Initialize the editor once mounted
   useEffect(() => {
     setIsMounted(true);
   }, []);
   
-  const executeCommand = useCallback((command: string, value?: string) => {
-    document.execCommand(command, false, value);
+  // Initialize iframe after it's mounted
+  useEffect(() => {
+    if (isMounted && iframeRef.current && !isInitialized) {
+      // Wait a bit to ensure iframe is fully loaded
+      const timer = setTimeout(() => {
+        initializeIframeEditor();
+        setIsInitialized(true);
+      }, 100);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isMounted, isInitialized]);
+  
+  // Update iframe content when value changes
+  useEffect(() => {
+    if (!isInitialized || !iframeRef.current) return;
     
-    // Update the onChange handler with the new content
-    if (editorRef.current) {
-      onChange(editorRef.current.innerHTML);
+    try {
+      const doc = iframeRef.current.contentDocument;
+      if (!doc || !doc.body) return;
+      
+      // Only update if content is different and we're not editing
+      const currentContent = doc.body.innerHTML;
+      if (currentContent !== value) {
+        doc.body.innerHTML = value || '';
+      }
+    } catch (err) {
+      console.error('Error updating iframe content:', err);
+    }
+  }, [value, isInitialized]);
+  
+  // Initialize the iframe editor with necessary styles and content
+  const initializeIframeEditor = useCallback(() => {
+    if (!iframeRef.current) return;
+    
+    try {
+      const iframe = iframeRef.current;
+      const doc = iframe.contentDocument || iframe.contentWindow?.document;
+      
+      if (!doc) {
+        console.error('Could not access iframe document');
+        return;
+      }
+      
+      // Set up the document
+      doc.designMode = 'on';
+      
+      // Write the initial HTML
+      doc.open();
+      doc.write(`
+        <!DOCTYPE html>
+        <html lang="en" dir="ltr">
+        <head>
+          <meta charset="utf-8">
+          <style>
+            html, body {
+              height: 100%;
+              margin: 0;
+              padding: 0;
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              direction: ltr;
+              text-align: left;
+            }
+            body {
+              padding: 16px;
+              min-height: 200px;
+              font-size: 0.875rem;
+              line-height: 1.5;
+              box-sizing: border-box;
+              outline: none;
+            }
+            body * {
+              direction: ltr !important;
+              text-align: left !important;
+            }
+            body:empty:before {
+              content: "${placeholder}";
+              color: #9ca3af;
+              position: absolute;
+              pointer-events: none;
+            }
+          </style>
+        </head>
+        <body>${value || ''}</body>
+        </html>
+      `);
+      doc.close();
+      
+      // Add event listener for content changes
+      doc.body.addEventListener('input', () => {
+        handleContentChange();
+      });
+      
+      // Focus the editor
+      doc.body.focus();
+      
+      console.log('Editor initialized successfully');
+    } catch (err) {
+      console.error('Error initializing iframe editor:', err);
+    }
+  }, [value, placeholder]);
+  
+  // Handle content changes from the iframe
+  const handleContentChange = useCallback(() => {
+    if (!iframeRef.current) return;
+    
+    try {
+      const doc = iframeRef.current.contentDocument || iframeRef.current.contentWindow?.document;
+      if (!doc || !doc.body) return;
+      
+      const newContent = doc.body.innerHTML;
+      onChange(newContent);
+    } catch (err) {
+      console.error('Error handling content change:', err);
     }
   }, [onChange]);
   
-  // Handle content changes
-  const handleContentChange = useCallback(() => {
-    if (editorRef.current) {
-      onChange(editorRef.current.innerHTML);
+  // Execute commands in the iframe
+  const executeCommand = useCallback((command: string, value?: string) => {
+    if (!iframeRef.current) return;
+    
+    try {
+      const doc = iframeRef.current.contentDocument || iframeRef.current.contentWindow?.document;
+      if (!doc) return;
+      
+      // Focus the document first
+      doc.body.focus();
+      
+      // Execute command
+      doc.execCommand(command, false, value);
+      
+      // Update content
+      handleContentChange();
+    } catch (err) {
+      console.error(`Error executing command ${command}:`, err);
     }
-  }, [onChange]);
+  }, [handleContentChange]);
+  
+  // Focus the editor
+  const focusEditor = useCallback(() => {
+    if (!iframeRef.current) return;
+    
+    try {
+      const doc = iframeRef.current.contentDocument || iframeRef.current.contentWindow?.document;
+      if (doc && doc.body) {
+        doc.body.focus();
+      }
+    } catch (err) {
+      console.error('Error focusing editor:', err);
+    }
+  }, []);
   
   if (!isMounted) {
     return (
@@ -133,23 +264,21 @@ export default function CustomEditor({
         </button>
       </div>
       
-      <div
-        ref={editorRef}
-        contentEditable="true"
-        onInput={handleContentChange}
-        onBlur={handleContentChange}
-        className="min-h-[200px] p-4 focus:outline-none prose prose-sm max-w-none"
-        data-placeholder={placeholder}
-        dangerouslySetInnerHTML={{ __html: value }}
-      />
-      
-      <style jsx>{`
-        [contenteditable=true]:empty:before {
-          content: attr(data-placeholder);
-          color: #9ca3af;
-          cursor: text;
-        }
-      `}</style>
+      {/* Editor iframe with click handler to focus */}
+      <div className="relative">
+        <iframe 
+          ref={iframeRef}
+          className="w-full min-h-[200px] border-0"
+          title="Rich Text Editor"
+          onClick={focusEditor}
+        />
+        
+        {/* Overlay to handle clicks and focus the iframe */}
+        <div 
+          className="absolute inset-0 pointer-events-none"
+          onClick={focusEditor}
+        />
+      </div>
     </div>
   );
 }

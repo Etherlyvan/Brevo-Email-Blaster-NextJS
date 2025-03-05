@@ -11,6 +11,9 @@ const nextConfig: NextConfig = {
     // Important: return the modified config
     return config;
   },
+  images: {
+    domains: ['lh3.googleusercontent.com'],
+  },
   // Disable React Strict Mode for compatibility with React 19
   reactStrictMode: false,
   // Increase timeout for build process
