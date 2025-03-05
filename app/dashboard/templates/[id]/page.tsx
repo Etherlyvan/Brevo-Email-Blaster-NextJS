@@ -6,7 +6,6 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import Header from '@/components/dashboard/Header';
 import TemplateViewer from '@/components/email/TemplateViewer';
-import DeleteTemplateButton from '@/components/email/DeleteTemplateButton';
 
 type Params = Promise<{ id: string }>;
 
