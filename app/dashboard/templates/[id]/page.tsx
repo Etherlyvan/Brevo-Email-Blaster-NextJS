@@ -8,12 +8,11 @@ import Header from '@/components/dashboard/Header';
 import TemplateViewer from '@/components/email/TemplateViewer';
 
 interface TemplatePageProps {
-  params: {
-    id: string;
-  };
+  params: Promise<{ id: string }>;  // Updated to match API route
 }
 
 export default async function TemplatePage({ params }: TemplatePageProps) {
+  const { id } = await params;  // Await the params Promise
   const session = await getServerSession(authOptions);
   
   if (!session?.user?.id) {
@@ -22,7 +21,7 @@ export default async function TemplatePage({ params }: TemplatePageProps) {
   
   const template = await prisma.emailTemplate.findUnique({
     where: {
-      id: params.id,
+      id: id,
       userId: session.user.id,
     },
   });
@@ -41,13 +40,13 @@ export default async function TemplatePage({ params }: TemplatePageProps) {
             <h2 className="text-lg font-medium text-gray-900">{template.name}</h2>
             <div className="flex space-x-3">
               <Link
-                href={`/dashboard/templates/edit/${template.id}`}
+                href={`/dashboard/templates/edit/${id}`}
                 className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
               >
                 Edit Template
               </Link>
               <Link
-                href={`/dashboard/campaigns/create?templateId=${template.id}`}
+                href={`/dashboard/campaigns/create?templateId=${id}`}
                 className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
               >
                 Use in Campaign
