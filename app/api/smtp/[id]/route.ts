@@ -4,9 +4,16 @@ import { getServerSession } from "next-auth/next";
 import { prisma } from "@/lib/db";
 import { authOptions } from "@/lib/auth";
 
+// For dynamic API routes in App Router, the params object is passed directly
+interface RouteParams {
+  params: {
+    id: string;
+  };
+}
+
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: RouteParams
 ) {
   const session = await getServerSession(authOptions);
   
@@ -59,7 +66,7 @@ export async function DELETE(
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: RouteParams
 ) {
   const session = await getServerSession(authOptions);
   
