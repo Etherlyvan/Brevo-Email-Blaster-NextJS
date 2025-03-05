@@ -4,14 +4,9 @@ import { getServerSession } from "next-auth/next";
 import { prisma } from "@/lib/db";
 import { authOptions } from "@/lib/auth";
 
-// Define the params structure
-interface Params {
-  id: string;
-}
-
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Params }
+  { params }: { params: Promise<Record<string, string>> }
 ) {
   const session = await getServerSession(authOptions);
   
@@ -19,8 +14,8 @@ export async function DELETE(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   
-  // Handle params that could be a Promise
-  const id = params.id;
+  // Await the params Promise to get the actual parameters
+  const { id } = await params;
   
   try {
     // Check if the SMTP config exists and belongs to the user
@@ -65,7 +60,7 @@ export async function DELETE(
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Params }
+  { params }: { params: Promise<Record<string, string>> }
 ) {
   const session = await getServerSession(authOptions);
   
@@ -73,8 +68,8 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   
-  // Handle params that could be a Promise
-  const id = params.id;
+  // Await the params Promise to get the actual parameters
+  const { id } = await params;
   
   try {
     const smtpConfig = await prisma.smtpConfig.findFirst({
