@@ -6,13 +6,13 @@ import { prisma } from '@/lib/db';
 import Header from '@/components/dashboard/Header';
 import TemplateEditor from '@/components/email/TemplateEditor';
 
-interface EditTemplatePageProps {
-  params: {
-    id: string;
-  };
+// Define the params type as a proper interface for Next.js page components
+interface PageProps {
+  params: Promise<{ id: string }>;
 }
 
-export default async function EditTemplatePage({ params }: Readonly<EditTemplatePageProps>) {
+export default async function EditTemplatePage({ params }: PageProps) {
+  const { id } = await params;  // Await the params Promise
   const session = await getServerSession(authOptions);
   
   if (!session?.user?.id) {
@@ -28,7 +28,7 @@ export default async function EditTemplatePage({ params }: Readonly<EditTemplate
   
   const template = await prisma.emailTemplate.findUnique({
     where: {
-      id: params.id,
+      id: id,  // Use the extracted id
       userId: session.user.id,
     },
   });
