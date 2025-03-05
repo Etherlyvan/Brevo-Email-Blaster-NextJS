@@ -104,6 +104,18 @@ const navigation: NavItem[] = [
 export default function Sidebar() {
   const pathname = usePathname();
   
+  // Fungsi untuk menentukan apakah tautan aktif atau tidak
+  const isActiveLink = (href: string): boolean => {
+    // Jika path persis sama dengan href, maka aktif
+    if (pathname === href) return true;
+    
+    // Untuk dashboard, hanya aktif jika path persis '/dashboard'
+    if (href === '/dashboard') return pathname === '/dashboard';
+    
+    // Untuk halaman lain, periksa apakah path dimulai dengan href dan diikuti oleh / atau tidak ada karakter lain
+    return pathname.startsWith(`${href}/`) || pathname === href;
+  };
+  
   return (
     <div className="flex flex-col flex-1 min-h-0 bg-gray-800">
       <div className="flex items-center flex-shrink-0 h-16 px-4 bg-gray-900">
@@ -112,7 +124,7 @@ export default function Sidebar() {
       <div className="flex flex-col flex-1 overflow-y-auto">
         <nav className="flex-1 px-2 py-4 space-y-1">
           {navigation.map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+            const isActive = isActiveLink(item.href);
             
             return (
               <Link
