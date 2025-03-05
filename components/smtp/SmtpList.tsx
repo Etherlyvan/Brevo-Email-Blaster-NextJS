@@ -3,8 +3,10 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import SmtpDeleteButton from './SmtpDeleteButton';
+import { FiEdit, FiSend } from 'react-icons/fi';
 
-// Define proper types for SMTP configurations
 interface SmtpConfig {
   id: string;
   name: string;
@@ -19,19 +21,11 @@ interface SmtpConfig {
   updatedAt: string;
 }
 
-// Define error type for better error handling
-interface ApiError {
-  message?: string;
-  error?: string;
-  status?: number;
-}
-
 export default function SmtpList() {
+  const router = useRouter();
   const [smtpConfigs, setSmtpConfigs] = useState<SmtpConfig[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
   
   useEffect(() => {
     fetchSmtpConfigs();
@@ -51,57 +45,20 @@ export default function SmtpList() {
       
       const data = await response.json();
       setSmtpConfigs(data);
-    } catch (errorObj: unknown) {
-      // Type-safe error handling
-      const typedError = errorObj as Error | ApiError;
-      const errorMessage = 
-        typeof typedError === 'object' && typedError !== null
-          ? typedError.message || 'An error occurred while fetching SMTP configurations'
-          : 'An unknown error occurred';
-      
-      setError(errorMessage);
-      console.error('Error fetching SMTP configs:', typedError);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'An error occurred while fetching SMTP configurations');
+      console.error('Error fetching SMTP configs:', error);
     } finally {
       setIsLoading(false);
     }
   };
   
-  const handleDelete = async (id: string) => {
-    setDeleteId(id);
-    setIsDeleting(true);
-    setError(null);
-    
-    try {
-      const response = await fetch(`/api/smtp/${id}`, {
-        method: 'DELETE',
-      });
-      
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to delete SMTP configuration');
-      }
-      
-      // Remove the deleted config from the state
-      setSmtpConfigs(prev => prev.filter(config => config.id !== id));
-    } catch (errorObj: unknown) {
-      // Type-safe error handling
-      const typedError = errorObj as Error | ApiError;
-      const errorMessage = 
-        typeof typedError === 'object' && typedError !== null
-          ? typedError.message || 'An error occurred while deleting the SMTP configuration'
-          : 'An unknown error occurred';
-      
-      setError(errorMessage);
-      console.error('Error deleting SMTP config:', typedError);
-    } finally {
-      setIsDeleting(false);
-      setDeleteId(null);
-    }
+  const handleDeleteSuccess = (deletedId: string) => {
+    setSmtpConfigs(prev => prev.filter(config => config.id !== deletedId));
+    router.refresh();
   };
   
-  // Extract the rendering logic for different states to improve readability
   const renderContent = () => {
-    // Loading state
     if (isLoading) {
       return (
         <div className="flex items-center justify-center p-8">
@@ -111,7 +68,6 @@ export default function SmtpList() {
       );
     }
     
-    // Error state
     if (error) {
       return (
         <div className="p-4 text-red-700 bg-red-100 rounded-md">
@@ -126,7 +82,6 @@ export default function SmtpList() {
       );
     }
     
-    // Empty state
     if (smtpConfigs.length === 0) {
       return (
         <div className="p-8 text-center border-2 border-dashed border-gray-300 rounded-md">
@@ -144,7 +99,6 @@ export default function SmtpList() {
       );
     }
     
-    // List state - showing the SMTP configurations
     return (
       <div className="overflow-hidden border border-gray-200 rounded-md shadow-sm">
         <table className="min-w-full divide-y divide-gray-200">
@@ -162,7 +116,7 @@ export default function SmtpList() {
               <th scope="col" className="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">
                 Status
               </th>
-              <th scope="col" className="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase">
+              <th scope="col" className="px-6 py-3 text-xs font-medium tracking-wider text-center text-gray-500 uppercase">
                 Actions
               </th>
             </tr>
@@ -200,25 +154,31 @@ export default function SmtpList() {
                   </span>
                 </td>
                 <td className="px-6 py-4 text-sm font-medium whitespace-nowrap">
-                  <div className="flex space-x-2">
+                  <div className="flex items-center justify-center space-x-6">
+                    {/* Edit Icon Button */}
                     <Link
                       href={`/dashboard/smtp/edit/${config.id}`}
-                      className="text-blue-600 hover:text-blue-900"
+                      className="p-2 text-blue-600 bg-blue-100 rounded-full hover:bg-blue-200 transition-colors"
+                      title="Edit Configuration"
                     >
-                      Edit
+                      <FiEdit className="w-5 h-5" />
                     </Link>
-                    <button
-                      onClick={() => handleDelete(config.id)}
-                      disabled={isDeleting && deleteId === config.id}
-                      className="text-red-600 hover:text-red-900 disabled:opacity-50"
-                    >
-                      {isDeleting && deleteId === config.id ? 'Deleting...' : 'Delete'}
-                    </button>
+                    
+                    {/* Delete Icon Button */}
+                    <SmtpDeleteButton 
+                      smtpId={config.id} 
+                      smtpName={config.name}
+                      onDelete={() => handleDeleteSuccess(config.id)}
+                      iconSize={5}
+                    />
+                    
+                    {/* Test Icon Button */}
                     <Link
                       href={`/dashboard/smtp/test/${config.id}`}
-                      className="text-green-600 hover:text-green-900"
+                      className="p-2 text-green-600 bg-green-100 rounded-full hover:bg-green-200 transition-colors"
+                      title="Test Configuration"
                     >
-                      Test
+                      <FiSend className="w-5 h-5" />
                     </Link>
                   </div>
                 </td>

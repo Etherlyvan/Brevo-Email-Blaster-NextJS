@@ -2,26 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-
-// Simplified approach to suppress the punycode deprecation warning
-// This avoids dealing with the complex types of process.emitWarning
-if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
-  // Replace the problematic code with a simpler approach
-  const originalConsoleWarn = console.warn;
-  // Fix the 'any' type with a more specific type
-  console.warn = function(...args: unknown[]) {
-    // Skip punycode deprecation warnings
-    if (
-      args.length > 0 && 
-      typeof args[0] === 'string' && 
-      args[0].includes('The `punycode` module is deprecated')
-    ) {
-      return;
-    }
-    return originalConsoleWarn.apply(console, args);
-  };
-}
+import { useRouter } from 'next/navigation';;
 
 interface SmtpFormProps {
   smtpConfig?: {
@@ -44,8 +25,10 @@ export default function SmtpForm({ smtpConfig, onSuccess }: Readonly<SmtpFormPro
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
   
   const [formData, setFormData] = useState({
+    id: '',
     name: '',
     host: '',
     port: 587,
@@ -58,8 +41,10 @@ export default function SmtpForm({ smtpConfig, onSuccess }: Readonly<SmtpFormPro
   });
   
   useEffect(() => {
-    if (smtpConfig) {
+    if (smtpConfig?.id) {
+      setIsEditMode(true);
       setFormData({
+        id: smtpConfig.id,
         name: smtpConfig.name || '',
         host: smtpConfig.host || '',
         port: smtpConfig.port || 587,
@@ -76,7 +61,6 @@ export default function SmtpForm({ smtpConfig, onSuccess }: Readonly<SmtpFormPro
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
     
-    // Simplified assignment logic
     let newValue;
     if (type === 'checkbox') {
       newValue = (e.target as HTMLInputElement).checked;
@@ -92,13 +76,10 @@ export default function SmtpForm({ smtpConfig, onSuccess }: Readonly<SmtpFormPro
     }));
   };
   
-  // Email validation without punycode
   const validateEmail = (email: string): boolean => {
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
     return emailRegex.test(email);
   };
-  
-  
   
   const handleTestConnection = async () => {
     setError(null);
@@ -106,7 +87,6 @@ export default function SmtpForm({ smtpConfig, onSuccess }: Readonly<SmtpFormPro
     setIsTesting(true);
     
     try {
-      // Validate email format
       if (!validateEmail(formData.fromEmail)) {
         throw new Error('Please enter a valid email address for From Email');
       }
@@ -156,31 +136,33 @@ export default function SmtpForm({ smtpConfig, onSuccess }: Readonly<SmtpFormPro
     setIsLoading(true);
     
     try {
-      // Validate form
       if (!formData.name || !formData.host || !formData.port || !formData.username || !formData.fromEmail) {
         throw new Error('Please fill in all required fields');
       }
       
-      // Validate email format
       if (!validateEmail(formData.fromEmail)) {
         throw new Error('Please enter a valid email address for From Email');
       }
       
-      // If editing, don't require password (it might not have changed)
-      if (!smtpConfig?.id && !formData.password) {
+      if (!isEditMode && !formData.password) {
         throw new Error('Password is required');
       }
       
+      const method = isEditMode ? 'PUT' : 'POST';
+      
+      const payload = {
+        ...formData,
+        ...(formData.password ? { password: formData.password } : {}),
+      };
+      
+      console.log(`Sending ${method} request with ID: ${payload.id}`);
+      
       const response = await fetch('/api/smtp', {
-        method: 'POST',
+        method: method,
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          ...formData,
-          // Only include id if editing
-          ...(smtpConfig?.id ? { id: smtpConfig.id } : {}),
-        }),
+        body: JSON.stringify(payload),
       });
       
       const result = await response.json();
@@ -222,10 +204,10 @@ export default function SmtpForm({ smtpConfig, onSuccess }: Readonly<SmtpFormPro
       )}
       
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Rest of the form remains unchanged */}
-        {/* ... */}
+        {isEditMode && (
+          <input type="hidden" name="id" value={formData.id} />
+        )}
         
-        {/* Form fields */}
         <div>
           <label htmlFor="name" className="block text-sm font-medium text-gray-700">
             Configuration Name *
@@ -291,7 +273,7 @@ export default function SmtpForm({ smtpConfig, onSuccess }: Readonly<SmtpFormPro
           
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-              SMTP Password {!smtpConfig?.id && '*'}
+              SMTP Password {!isEditMode && '*'}
             </label>
             <input
               id="password"
@@ -300,8 +282,8 @@ export default function SmtpForm({ smtpConfig, onSuccess }: Readonly<SmtpFormPro
               value={formData.password}
               onChange={handleChange}
               className="block w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              required={!smtpConfig?.id}
-              placeholder={smtpConfig?.id ? '(unchanged)' : ''}
+              required={!isEditMode}
+              placeholder={isEditMode ? '(unchanged)' : ''}
             />
           </div>
           
@@ -369,13 +351,13 @@ export default function SmtpForm({ smtpConfig, onSuccess }: Readonly<SmtpFormPro
             disabled={isLoading}
             className="inline-flex justify-center w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:w-auto disabled:opacity-50"
           >
-            {isLoading ? 'Saving...' : 'Save Configuration'}
+            {isLoading ? 'Saving...' : (isEditMode ? 'Update Configuration' : 'Save Configuration')}
           </button>
           
           <button
             type="button"
             onClick={handleTestConnection}
-            disabled={isTesting || !formData.host || !formData.port || !formData.username || !formData.password || !formData.fromEmail}
+            disabled={isTesting || !formData.host || !formData.port || !formData.username || (!formData.password && !isEditMode) || !formData.fromEmail}
             className="inline-flex justify-center w-full px-4 py-2 text-sm font-medium text-blue-700 bg-blue-100 border border-transparent rounded-md shadow-sm hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:w-auto disabled:opacity-50"
           >
             {isTesting ? 'Testing...' : 'Test Connection'}

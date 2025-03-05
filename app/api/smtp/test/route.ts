@@ -3,28 +3,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { prisma } from "@/lib/db";
 import { authOptions } from "@/lib/auth";
-import { createTransport } from 'nodemailer';
+import { createSmtpTransport } from "@/lib/email";
 import { SmtpConfig } from "@prisma/client";
 
-// Simplified approach to suppress the punycode deprecation warning
-// This avoids dealing with the complex types of process.emitWarning
-if (typeof process !== 'undefined') {
-  // Replace the problematic code with a simpler approach that fixes the argument count error
-  const originalConsoleWarn = console.warn;
-  console.warn = function(...args: unknown[]) {
-    // Skip punycode deprecation warnings
-    if (
-      args.length > 0 && 
-      typeof args[0] === 'string' && 
-      args[0].includes('The `punycode` module is deprecated')
-    ) {
-      return;
-    }
-    return originalConsoleWarn.apply(console, args);
-  };
-}
-
-// Define an interface for temporary SMTP configurations
 interface TempSmtpConfig {
   host: string;
   port: number;
@@ -33,59 +14,6 @@ interface TempSmtpConfig {
   password: string;
   fromEmail: string;
   fromName: string;
-}
-
-// Define an error type for better error handling
-interface ApiError extends Error {
-  response?: string;
-  details?: string;
-  code?: string;
-}
-
-// Email validation function that doesn't rely on punycode
-function validateEmail(email: string): boolean {
-  // Fix control character in regex by using a standard ASCII-only regex
-  const emailRegex = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
-  return emailRegex.test(email);
-}
-
-// Sanitize email to avoid punycode issues
-function sanitizeEmail(email: string): string {
-  // Remove any non-ASCII characters that might trigger punycode
-  return email.replace(/[^\x00-\x7F]/g, '');
-}
-
-// Create SMTP transporter with sanitized email
-async function createSmtpTransport(config: SmtpConfig | TempSmtpConfig) {
-  return createTransport({
-    host: config.host,
-    port: config.port,
-    secure: config.secure,
-    auth: {
-      user: config.username,
-      pass: config.password,
-    },
-    debug: process.env.NODE_ENV !== 'production',
-  });
-}
-
-// Send test email with sanitized emails
-async function sendTestEmail(config: SmtpConfig | TempSmtpConfig) {
-  const transporter = await createSmtpTransport(config);
-  
-  // Sanitize fromEmail to avoid punycode issues
-  const sanitizedFromEmail = sanitizeEmail(config.fromEmail);
-  const sanitizedFromName = config.fromName || sanitizedFromEmail;
-  
-  const info = await transporter.sendMail({
-    from: `"${sanitizedFromName}" <${sanitizedFromEmail}>`,
-    to: sanitizedFromEmail,
-    subject: "SMTP Test",
-    text: "This is a test email to verify SMTP configuration.",
-    html: "<p>This is a test email to verify SMTP configuration.</p>",
-  });
-  
-  return info;
 }
 
 export async function POST(request: NextRequest) {
@@ -98,6 +26,14 @@ export async function POST(request: NextRequest) {
   const data = await request.json();
   
   try {
+    // Email validation
+    const emailRegex = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
+    const testEmail = data.testEmail || null;
+    
+    if (testEmail && !emailRegex.test(testEmail)) {
+      return NextResponse.json({ error: "Invalid test email format" }, { status: 400 });
+    }
+    
     // If smtpId is provided, use existing config
     if (data.smtpId) {
       const smtpConfig = await prisma.smtpConfig.findUnique({
@@ -111,8 +47,41 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "SMTP configuration not found" }, { status: 404 });
       }
       
-      const result = await sendTestEmail(smtpConfig);
-      return NextResponse.json({ success: true, messageId: result.messageId });
+      // Create the transporter
+      const transporter = await createSmtpTransport(smtpConfig);
+      
+      // Sanitize emails
+      const fromEmail = smtpConfig.fromEmail.replace(/[^\x00-\x7F]/g, '');
+      const toEmail = testEmail ? testEmail.replace(/[^\x00-\x7F]/g, '') : fromEmail;
+      
+      // Send test email
+      const info = await transporter.sendMail({
+        from: `"${smtpConfig.fromName}" <${fromEmail}>`,
+        to: toEmail,
+        subject: "SMTP Test Email",
+        text: "This is a test email to verify your SMTP configuration is working correctly.",
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
+            <h2 style="color: #4a5568;">SMTP Configuration Test</h2>
+            <p>This is a test email to verify your SMTP configuration is working correctly.</p>
+            <div style="margin-top: 20px; padding: 15px; background-color: #f7fafc; border-radius: 5px;">
+              <p style="margin: 5px 0;"><strong>Server:</strong> ${smtpConfig.host}:${smtpConfig.port}</p>
+              <p style="margin: 5px 0;"><strong>Security:</strong> ${smtpConfig.secure ? 'SSL/TLS' : 'None'}</p>
+              <p style="margin: 5px 0;"><strong>From:</strong> ${smtpConfig.fromName} &lt;${smtpConfig.fromEmail}&gt;</p>
+              <p style="margin: 5px 0;"><strong>Date:</strong> ${new Date().toLocaleString()}</p>
+            </div>
+            <p style="margin-top: 20px; font-size: 0.9em; color: #718096;">
+              This is an automated test email from your Brevo Email App.
+            </p>
+          </div>
+        `,
+      });
+      
+      return NextResponse.json({ 
+        success: true, 
+        messageId: info.messageId,
+        recipient: toEmail
+      });
     } 
     // Otherwise use provided config without saving
     else if (data.config) {
@@ -122,38 +91,80 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
       }
       
-      // Validate email format
-      if (!validateEmail(fromEmail)) {
-        return NextResponse.json({ error: "Invalid email format" }, { status: 400 });
-      }
-      
-      const sanitizedFromEmail = sanitizeEmail(fromEmail);
-      
       const tempConfig: TempSmtpConfig = {
         host,
         port: parseInt(port),
         secure: !!secure,
         username,
         password,
-        fromEmail: sanitizedFromEmail,
-        fromName: fromName || sanitizedFromEmail,
+        fromEmail,
+        fromName: fromName || fromEmail,
       };
       
-      // Cast to SmtpConfig only for the sendTestEmail function
-      const result = await sendTestEmail(tempConfig);
-      return NextResponse.json({ success: true, messageId: result.messageId });
+      // Create the transporter
+      const transporter = await createSmtpTransport(tempConfig as SmtpConfig);
+      
+      // Sanitize emails
+      const fromEmailSanitized = tempConfig.fromEmail.replace(/[^\x00-\x7F]/g, '');
+      const toEmail = testEmail ? testEmail.replace(/[^\x00-\x7F]/g, '') : fromEmailSanitized;
+      
+      // Send test email
+      const info = await transporter.sendMail({
+        from: `"${tempConfig.fromName}" <${fromEmailSanitized}>`,
+        to: toEmail,
+        subject: "SMTP Test Email",
+        text: "This is a test email to verify your SMTP configuration is working correctly.",
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
+            <h2 style="color: #4a5568;">SMTP Configuration Test</h2>
+            <p>This is a test email to verify your SMTP configuration is working correctly.</p>
+            <div style="margin-top: 20px; padding: 15px; background-color: #f7fafc; border-radius: 5px;">
+              <p style="margin: 5px 0;"><strong>Server:</strong> ${tempConfig.host}:${tempConfig.port}</p>
+              <p style="margin: 5px 0;"><strong>Security:</strong> ${tempConfig.secure ? 'SSL/TLS' : 'None'}</p>
+              <p style="margin: 5px 0;"><strong>From:</strong> ${tempConfig.fromName} &lt;${tempConfig.fromEmail}&gt;</p>
+              <p style="margin: 5px 0;"><strong>Date:</strong> ${new Date().toLocaleString()}</p>
+            </div>
+            <p style="margin-top: 20px; font-size: 0.9em; color: #718096;">
+              This is an automated test email from your Brevo Email App.
+            </p>
+          </div>
+        `,
+      });
+      
+      return NextResponse.json({ 
+        success: true, 
+        messageId: info.messageId,
+        recipient: toEmail
+      });
     } else {
       return NextResponse.json({ error: "Either smtpId or config must be provided" }, { status: 400 });
     }
-  } catch (error: unknown) {
+  } catch (error) {
     console.error("Error testing SMTP config:", error);
     
-    // Type guard and proper error handling
-    const typedError = error as ApiError;
+    let errorMessage = "Failed to send test email";
+    let errorDetails = "Unknown error occurred";
+    
+    if (error instanceof Error) {
+      errorMessage = error.message;
+      
+      // Extract more meaningful error messages for common SMTP errors
+      if (error.message.includes('ECONNREFUSED')) {
+        errorDetails = "Connection refused. Please check your SMTP server address and port.";
+      } else if (error.message.includes('ETIMEDOUT')) {
+        errorDetails = "Connection timed out. Please check your SMTP server address and port.";
+      } else if (error.message.includes('Invalid login')) {
+        errorDetails = "Invalid login credentials. Please check your username and password.";
+      } else if (error.message.includes('certificate')) {
+        errorDetails = "SSL/TLS certificate error. Try disabling secure connection or check your server settings.";
+      } else {
+        errorDetails = error.message;
+      }
+    }
     
     return NextResponse.json({ 
-      error: "Failed to send test email", 
-      details: typedError.message || "Unknown error occurred"
+      error: errorMessage, 
+      details: errorDetails 
     }, { status: 500 });
   }
 }

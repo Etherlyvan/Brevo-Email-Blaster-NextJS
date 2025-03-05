@@ -4,17 +4,14 @@ import { getServerSession } from "next-auth/next";
 import { prisma } from "@/lib/db";
 import { authOptions } from "@/lib/auth";
 
-// Email validation function that doesn't rely on punycode
+// Email validation function
 function validateEmail(email: string): boolean {
-  // Fix control character in regex by using a standard ASCII-only regex
-  // Original: const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
   const emailRegex = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
   return emailRegex.test(email);
 }
 
-// Sanitize email to avoid punycode issues
+// Sanitize email to avoid encoding issues
 function sanitizeEmail(email: string): string {
-  // Remove any non-ASCII characters that might trigger punycode
   return email.replace(/[^\x00-\x7F]/g, '');
 }
 
@@ -67,7 +64,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid email format" }, { status: 400 });
     }
     
-    // Sanitize email to avoid punycode issues
+    // Sanitize email
     const sanitizedFromEmail = sanitizeEmail(data.fromEmail);
     
     // If this is set as default, unset other defaults
@@ -124,7 +121,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Invalid email format" }, { status: 400 });
     }
     
-    // Sanitize email to avoid punycode issues
+    // Sanitize email
     const sanitizedFromEmail = sanitizeEmail(data.fromEmail);
     
     // Check if config exists and belongs to user
@@ -150,8 +147,7 @@ export async function PUT(request: NextRequest) {
       });
     }
     
-    // Create update data object - Fix the 'any' type
-    // Replace 'any' with a proper type definition
+    // Create update data object
     interface UpdateData {
       name: string;
       host: string;
@@ -193,45 +189,5 @@ export async function PUT(request: NextRequest) {
   } catch (error) {
     console.error("Error updating SMTP config:", error);
     return NextResponse.json({ error: "Failed to update SMTP configuration" }, { status: 500 });
-  }
-}
-
-export async function DELETE(request: NextRequest) {
-  const session = await getServerSession(authOptions);
-  
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  
-  // Get the ID from the URL
-  const url = new URL(request.url);
-  const id = url.pathname.split('/').pop();
-  
-  if (!id) {
-    return NextResponse.json({ error: "Missing SMTP configuration ID" }, { status: 400 });
-  }
-  
-  try {
-    // Check if config exists and belongs to user
-    const existingConfig = await prisma.smtpConfig.findFirst({
-      where: {
-        id,
-        userId: session.user.id,
-      },
-    });
-    
-    if (!existingConfig) {
-      return NextResponse.json({ error: "SMTP configuration not found" }, { status: 404 });
-    }
-    
-    // Delete the config
-    await prisma.smtpConfig.delete({
-      where: { id },
-    });
-    
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error("Error deleting SMTP config:", error);
-    return NextResponse.json({ error: "Failed to delete SMTP configuration" }, { status: 500 });
   }
 }

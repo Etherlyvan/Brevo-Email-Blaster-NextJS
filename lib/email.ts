@@ -1,8 +1,7 @@
 // lib/email.ts
-import { createTransport } from 'nodemailer';
 import { SmtpConfig } from '@prisma/client';
 import * as XLSX from 'xlsx';
-
+import nodemailer from 'nodemailer';
 // Simplified approach to suppress the punycode deprecation warning
 // This avoids dealing with the complex types of process.emitWarning
 if (typeof process !== 'undefined') {
@@ -41,19 +40,29 @@ export function sanitizeEmail(email: string): string {
   return email.replace(/[^\x00-\x7F]/g, '');
 }
 
-export async function createSmtpTransport(config: SmtpConfig) {
-  return createTransport({
-    host: config.host,
-    port: config.port,
-    secure: config.secure,
+export async function createSmtpTransport(smtpConfig: SmtpConfig) {
+  const transporter = nodemailer.createTransport({
+    host: smtpConfig.host,
+    port: smtpConfig.port,
+    secure: smtpConfig.secure,
     auth: {
-      user: config.username,
-      pass: config.password,
+      user: smtpConfig.username,
+      pass: smtpConfig.password,
     },
-    debug: process.env.NODE_ENV !== 'production',
+    // Increase timeout for slow SMTP servers
+    connectionTimeout: 10000,
+    // Logger for debugging
+    ...(process.env.NODE_ENV === 'development' ? {
+      debug: true,
+      logger: true,
+    } : {}),
   });
+  
+  // Verify connection configuration
+  await transporter.verify();
+  
+  return transporter;
 }
-
 export async function sendTestEmail(config: SmtpConfig) {
   const transporter = await createSmtpTransport(config);
   
