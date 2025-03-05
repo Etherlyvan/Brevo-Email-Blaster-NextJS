@@ -6,12 +6,11 @@ import { prisma } from '@/lib/db';
 import Header from '@/components/dashboard/Header';
 import TemplateEditor from '@/components/email/TemplateEditor';
 
-// Define the params type as a proper interface for Next.js page components
-interface PageProps {
-  params: Promise<{ id: string }>;
-}
+// Define params type
+type Params = Promise<{ id: string }>;
 
-export default async function EditTemplatePage({ params }: PageProps) {
+// Correct syntax for the component props
+export default async function EditTemplatePage({ params }: { params: Params }) {
   const { id } = await params;  // Await the params Promise
   const session = await getServerSession(authOptions);
   
