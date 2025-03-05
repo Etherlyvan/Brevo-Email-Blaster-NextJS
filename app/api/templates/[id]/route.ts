@@ -4,9 +4,15 @@ import { getServerSession } from "next-auth/next";
 import { prisma } from "@/lib/db";
 import { authOptions } from "@/lib/auth";
 
+interface RouteParams {
+  params: {
+    id: string;
+  }
+}
+
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  context: RouteParams
 ) {
   const session = await getServerSession(authOptions);
   
@@ -14,7 +20,7 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   
-  const id = params.id;
+  const id = context.params.id;
   
   try {
     const template = await prisma.emailTemplate.findUnique({
@@ -37,7 +43,7 @@ export async function GET(
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  context: RouteParams
 ) {
   const session = await getServerSession(authOptions);
   
@@ -45,7 +51,7 @@ export async function DELETE(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   
-  const id = params.id;
+  const id = context.params.id;
   
   try {
     // Verify template belongs to user
