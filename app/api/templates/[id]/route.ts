@@ -9,6 +9,7 @@ export async function GET(
   request:  NextRequest,
   { params }: { params: Promise<{ id: string }>  }
 ) {
+  const { id } = await params;
   const session = await getServerSession(authOptions);
   
   if (!session?.user?.id) {
@@ -19,7 +20,7 @@ export async function GET(
     
     const template = await prisma.emailTemplate.findUnique({
       where: {
-        id : (await params).id,
+        id :  id ,
         userId: session.user.id,
       },
     });
@@ -39,6 +40,7 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }>  }
 ) {
+    const { id } = await params;
   const session = await getServerSession(authOptions);
   
   if (!session?.user?.id) {
@@ -49,7 +51,7 @@ export async function DELETE(
     // Verify template belongs to user
     const template = await prisma.emailTemplate.findFirst({
       where: {
-        id: (await params).id,
+        id: id,
         userId: session.user.id,
       },
     });
