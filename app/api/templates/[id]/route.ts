@@ -4,10 +4,15 @@ import { getServerSession } from "next-auth/next";
 import { prisma } from "@/lib/db";
 import { authOptions } from "@/lib/auth";
 
-// Direct implementation without custom interfaces
+interface RouteContext {
+  params: {
+    id: string;
+  }
+}
+
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  context: RouteContext
 ) {
   const session = await getServerSession(authOptions);
   
@@ -18,7 +23,7 @@ export async function GET(
   try {
     const template = await prisma.emailTemplate.findUnique({
       where: {
-        id: params.id,
+        id: context.params.id,
         userId: session.user.id,
       },
     });
@@ -36,7 +41,7 @@ export async function GET(
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  context: RouteContext
 ) {
   const session = await getServerSession(authOptions);
   
@@ -48,7 +53,7 @@ export async function DELETE(
     // Verify template belongs to user
     const template = await prisma.emailTemplate.findFirst({
       where: {
-        id: params.id,
+        id: context.params.id,
         userId: session.user.id,
       },
     });
@@ -59,7 +64,7 @@ export async function DELETE(
     
     // Delete template
     await prisma.emailTemplate.delete({
-      where: { id: params.id },
+      where: { id: context.params.id },
     });
     
     return NextResponse.json({ success: true });
