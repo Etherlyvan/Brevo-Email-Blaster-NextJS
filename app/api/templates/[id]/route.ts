@@ -6,9 +6,12 @@ import { authOptions } from "@/lib/auth";
 
 // Use the exact type signature expected by Next.js
 export async function GET(
-  request:  NextRequest,
-  { params }: { params: Promise<{ id: string }>  }
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  // Await the params Promise to get the id
+  const resolvedParams = await params;
+  
   const session = await getServerSession(authOptions);
   
   if (!session?.user?.id) {
@@ -18,7 +21,7 @@ export async function GET(
   try {
     const template = await prisma.emailTemplate.findUnique({
       where: {
-        id: params.id,
+        id: resolvedParams.id,
         userId: session.user.id,
       },
     });
@@ -35,9 +38,12 @@ export async function GET(
 }
 
 export async function DELETE(
-  request: Request,
-  { params }: { params: { id: string } }
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  // Await the params Promise to get the id
+  const resolvedParams = await params;
+  
   const session = await getServerSession(authOptions);
   
   if (!session?.user?.id) {
@@ -48,7 +54,7 @@ export async function DELETE(
     // Verify template belongs to user
     const template = await prisma.emailTemplate.findFirst({
       where: {
-        id: params.id,
+        id: resolvedParams.id,
         userId: session.user.id,
       },
     });
@@ -59,7 +65,7 @@ export async function DELETE(
     
     // Delete template
     await prisma.emailTemplate.delete({
-      where: { id: params.id },
+      where: { id: resolvedParams.id },
     });
     
     return NextResponse.json({ success: true });
