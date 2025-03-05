@@ -4,11 +4,16 @@ import { getServerSession } from "next-auth/next";
 import { prisma } from "@/lib/db";
 import { authOptions } from "@/lib/auth";
 
-type Params = { id: string };
+// Define the params type correctly for Next.js App Router
+type RouteContext = {
+  params: {
+    id: string;
+  }
+};
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Params | Promise<Params> }
+  context: RouteContext
 ) {
   const session = await getServerSession(authOptions);
   
@@ -16,8 +21,7 @@ export async function DELETE(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   
-  const resolvedParams = await Promise.resolve(params);
-  const { id } = resolvedParams;
+  const { id } = context.params;
   
   try {
     // Check if the SMTP config exists and belongs to the user
@@ -62,7 +66,7 @@ export async function DELETE(
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Params | Promise<Params> }
+  context: RouteContext
 ) {
   const session = await getServerSession(authOptions);
   
@@ -70,8 +74,7 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   
-  const resolvedParams = await Promise.resolve(params);
-  const { id } = resolvedParams;
+  const { id } = context.params;
   
   try {
     const smtpConfig = await prisma.smtpConfig.findFirst({
