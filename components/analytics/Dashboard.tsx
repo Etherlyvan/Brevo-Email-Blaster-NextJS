@@ -1,4 +1,6 @@
 // components/analytics/Dashboard.tsx
+'use client';
+
 import { useState, useEffect } from 'react';
 import { Line } from 'react-chartjs-2';
 import {
@@ -202,7 +204,7 @@ export default function AnalyticsDashboard({ campaignId }: AnalyticsDashboardPro
       
       {/* Chart */}
       <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-        <h3 className="text-lg font-medium mb-4">Email Performance Over Time</h3>
+        <h3 className="text-lg font-medium text-gray-900 mb-4">Email Performance Over Time</h3>
         <div className="h-80">
           <Line 
             data={chartData}
@@ -222,18 +224,18 @@ export default function AnalyticsDashboard({ campaignId }: AnalyticsDashboardPro
       {/* Top campaigns */}
       {!campaignId && topCampaigns.length > 0 && (
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-          <h3 className="text-lg font-medium mb-4">Top Performing Campaigns</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Top Performing Campaigns</h3>
           <div className="overflow-x-auto">
             <table className="min-w-full">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Campaign
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Open Rate
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Click Rate
                   </th>
                 </tr>
