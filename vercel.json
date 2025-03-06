@@ -1,0 +1,12 @@
+{
+    "crons": [
+      {
+        "path": "/api/cron/cleanup-images",
+        "schedule": "0 0 * * *"
+      },
+      {
+        "path": "/api/cron/reset-smtp-quotas",
+        "schedule": "0 0 * * *"
+      }
+    ]
+  }

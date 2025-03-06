@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import bcrypt from "bcrypt";
 import { z } from "zod";
+import { cacheUserImage } from "@/lib/user-image";
 
 const registerSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -35,7 +36,7 @@ export async function POST(request: NextRequest) {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
     
-    // Create user
+    // Create user (initially without cachedImagePath)
     const user = await prisma.user.create({
       data: {
         name,
@@ -44,6 +45,23 @@ export async function POST(request: NextRequest) {
         image,
       },
     });
+    
+    // If user has an image, cache it
+    let cachedImagePath = null;
+    if (image) {
+      try {
+        cachedImagePath = await cacheUserImage(user.id, image);
+        
+        // Update the user with the cached image path
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { cachedImagePath }
+        });
+      } catch (cacheError) {
+        console.error("Error caching profile image during registration:", cacheError);
+        // Continue with registration even if image caching fails
+      }
+    }
     
     // If this user is registering with Google, create the Account
     if (googleId) {
@@ -62,6 +80,8 @@ export async function POST(request: NextRequest) {
       id: user.id,
       name: user.name,
       email: user.email,
+      image: user.image,
+      cachedImagePath
     });
   } catch (error) {
     console.error("Error during registration:", error);
