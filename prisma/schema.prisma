@@ -1,4 +1,5 @@
 // prisma/schema.prisma
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,7 +9,6 @@ datasource db {
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
-
 
 model Account {
   id                 String  @id @default(cuid())
@@ -44,6 +44,7 @@ model User {
   emailVerified DateTime?
   password      String?
   image         String?
+  cachedImagePath String?  // Added field for cached image path
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   accounts      Account[]
@@ -51,6 +52,8 @@ model User {
   smtpConfigs   SmtpConfig[]
   emailTemplates EmailTemplate[]
   campaigns     Campaign[]
+  contacts      Contact[]
+  contactGroups ContactGroup[]
 }
 
 model VerificationToken {
@@ -76,6 +79,12 @@ model SmtpConfig {
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+  logs          EmailLog[]
+  campaigns     Campaign[]
+  lastUsed      DateTime?
+  dailyQuota    Int       @default(300) // Default daily quota
+  usedToday     Int       @default(0)   // Track usage for the current day
+  lastQuotaReset DateTime? // Track when the quota was last reset
 }
 
 model EmailTemplate {
@@ -91,28 +100,112 @@ model EmailTemplate {
   updatedAt   DateTime  @updatedAt
 }
 
+model ContactGroup {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contacts    ContactsOnGroups[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  CampaignTargetGroups CampaignTargetGroups[]
+}
+
+model Contact {
+  id          String    @id @default(cuid())
+  email       String
+  name        String?
+  metadata    Json?     // Additional contact data
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  groups      ContactsOnGroups[]
+  recipients  Recipient[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  @@unique([email, userId]) // Ensure email is unique per user
+}
+
+model ContactsOnGroups {
+  contactId     String
+  contact       Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  groupId       String
+  group         ContactGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  assignedAt    DateTime     @default(now())
+  @@id([contactId, groupId])
+}
+
+model Recipient {
+  id            String    @id @default(cuid())
+  email         String
+  name          String?
+  metadata      Json?     // Additional recipient data for parameters
+  campaignId    String?
+  campaign      Campaign? @relation(fields: [campaignId], references: [id])
+  contactId     String?
+  contact       Contact?  @relation(fields: [contactId], references: [id])
+  status        String    @default("pending") // pending, sent, failed
+  errorMessage  String?   // Store error message if failed
+  sentAt        DateTime? // When the email was sent
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  retryCount    Int       @default(0) // Track how many times we've tried to send this email
+  logs          EmailLog[]
+}
+
+// Add EmailLog for analytics
+model EmailLog {
+  id            String    @id @default(cuid())
+  campaignId    String
+  campaign      Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  recipientId   String
+  recipient     Recipient @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  smtpConfigId  String
+  smtpConfig    SmtpConfig @relation(fields: [smtpConfigId], references: [id], onDelete: Cascade)
+  status        String    // sent, failed, opened, clicked
+  sentAt        DateTime
+  openedAt      DateTime?
+  clickedAt     DateTime?
+  errorMessage  String?
+  userAgent     String?   // For tracking opens/clicks
+  ipAddress     String?   // For tracking opens/clicks
+}
+
 model Campaign {
   id              String    @id @default(cuid())
   name            String
-  status          String    @default("draft") // draft, scheduled, sent, failed
+  status          String    @default("draft") // draft, queued, processing, sent, failed, partial
   recipientCount  Int       @default(0)
+  processedCount  Int       @default(0)      // Track how many recipients have been processed
+  successCount    Int       @default(0)      // Track successfully sent emails
+  failCount       Int       @default(0)      // Track failed emails
+  openCount       Int       @default(0)
+  clickCount      Int       @default(0)
   templateId      String
   template        EmailTemplate @relation(fields: [templateId], references: [id])
   smtpConfigId    String?
+  smtpConfig      SmtpConfig? @relation(fields: [smtpConfigId], references: [id])
   parameterValues Json?     // Store parameter values for this campaign
   userId          String
   user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+  startedAt       DateTime?
+  completedAt     DateTime?
   recipients      Recipient[]
+  logs            EmailLog[]
+  targetGroups    CampaignTargetGroups[]
+  lastProcessedAt DateTime? // Track when the campaign was last processed
+  nextBatchIndex  Int       @default(0) // Track which batch to process next
+  batchSize       Int       @default(20) // Number of emails to process in each batch
+  lastError       String?   // Store the last error that occurred during processing
 }
 
-model Recipient {
-  id          String    @id @default(cuid())
-  email       String
-  name        String?
-  metadata    Json?     // Additional recipient data for parameters
-  campaignId  String?
-  campaign    Campaign? @relation(fields: [campaignId], references: [id])
-  createdAt   DateTime  @default(now())
+model CampaignTargetGroups {
+  campaignId    String
+  campaign      Campaign    @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  groupId       String
+  group         ContactGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  @@id([campaignId, groupId])
 }

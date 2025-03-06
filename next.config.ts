@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   experimental: {
+    
     serverComponentsExternalPackages: ['@prisma/client', 'bcrypt']
   },
   webpack: (config) => {
@@ -12,8 +13,12 @@ const nextConfig: NextConfig = {
     return config;
   },
   images: {
-    domains: ['lh3.googleusercontent.com'],
+    domains: ['lh3.googleusercontent.com',
+      'https://gdseeanbqtomckzaegjl.supabase.co'
+    ],
+    
   },
+  
   // Disable React Strict Mode for compatibility with React 19
   reactStrictMode: false,
   // Increase timeout for build process
