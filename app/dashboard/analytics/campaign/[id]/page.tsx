@@ -7,7 +7,14 @@ import { prisma } from '@/lib/db';
 import Header from '@/components/dashboard/Header';
 import AnalyticsDashboard from '@/components/analytics/Dashboard';
 
-export default async function CampaignAnalyticsPage({ params }: { params: { id: string } }) {
+export default async function CampaignAnalyticsPage({ 
+  params 
+}: { 
+  params: Promise<{ id: string }> 
+}) {
+  // Await the params promise to get the actual parameters
+  const { id } = await params;
+  
   const session = await getServerSession(authOptions);
   
   if (!session?.user) {
@@ -17,7 +24,7 @@ export default async function CampaignAnalyticsPage({ params }: { params: { id: 
   // Verify the campaign exists and belongs to the user
   const campaign = await prisma.campaign.findFirst({
     where: {
-      id: params.id,
+      id: id,
       userId: session.user.id,
     },
     select: {
