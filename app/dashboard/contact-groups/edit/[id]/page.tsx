@@ -4,7 +4,14 @@ import { authOptions } from '@/lib/auth';
 import Header from '@/components/dashboard/Header';
 import ContactGroupForm from '@/components/contacts/ContactGroupForm';
 
-export default async function EditContactGroupPage({ params }: { params: { id: string } }) {
+export default async function EditContactGroupPage({ 
+  params 
+}: { 
+  params: Promise<{ id: string }> 
+}) {
+  // Await the params promise to get the actual parameters
+  const { id } = await params;
+  
   const session = await getServerSession(authOptions);
   
   if (!session?.user) {
@@ -17,7 +24,7 @@ export default async function EditContactGroupPage({ params }: { params: { id: s
       
       <div className="py-6 mx-auto max-w-7xl sm:px-6 lg:px-8">
         <div className="px-4 sm:px-0">
-          <ContactGroupForm groupId={params.id} />
+          <ContactGroupForm groupId={id} />
         </div>
       </div>
     </div>
