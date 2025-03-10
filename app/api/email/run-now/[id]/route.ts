@@ -9,38 +9,27 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  console.log("Run Now API called with params:", params);
-  
   const session = await getServerSession(authOptions);
   
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { 
-      status: 401,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   
   const { id: campaignId } = params;
   
   try {
-    // Log untuk debugging
-    const bodyText = await request.text();
-    console.log(`Running scheduled campaign ${campaignId} now. Request body:`, bodyText || "No body");
+    console.log(`Running scheduled campaign ${campaignId} now`);
     
     // Check if campaign exists, is scheduled, and belongs to user
     const campaign = await prisma.campaign.findFirst({
       where: {
         id: campaignId,
         userId: session.user.id,
-        isScheduled: true,
       },
     });
     
     if (!campaign) {
-      return NextResponse.json({ error: "Scheduled campaign not found" }, { 
-        status: 404,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
     }
     
     // Update campaign to start now
@@ -63,16 +52,11 @@ export async function POST(
     return NextResponse.json({
       success: true,
       message: "Campaign started successfully",
-    }, {
-      headers: { 'Content-Type': 'application/json' }
     });
   } catch (error) {
     console.error("Error running scheduled campaign:", error);
     return NextResponse.json({ 
       error: error instanceof Error ? error.message : "Failed to run campaign" 
-    }, { 
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    }, { status: 500 });
   }
 }

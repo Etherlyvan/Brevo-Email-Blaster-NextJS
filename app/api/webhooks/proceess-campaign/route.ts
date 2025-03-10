@@ -1,20 +1,13 @@
-// app/api/webhooks/process-campaign/route.ts
+// app/api/webhooks/process-campaign/route.ts (modifikasi)
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { 
-  sendEmailWithRetry, 
-  acquireCampaignLock, 
-  triggerProcessBatch, 
-  getNextAvailableSmtp, 
-  isCampaignCompleted, 
-  finalizeCampaign 
-} from "@/lib/queue";
+import { sendEmailWithRetry, getNextAvailableSmtp, triggerProcessBatch, finalizeCampaign, isCampaignCompleted } from "@/lib/queue";
 
 export const maxDuration = 60; // 60 seconds max duration
 export const dynamic = 'force-dynamic'; // Ensure this is not cached
 
-// For production, use smaller batch size to avoid timeout
-const BATCH_SIZE = process.env.NODE_ENV === 'production' ? 5 : 10;
+// For Vercel Hobby Plan, use smaller batch size to avoid timeout
+const BATCH_SIZE = 5; // Smaller batch size for more reliable processing
 
 export async function POST(request: NextRequest) {
   console.log("Webhook handler triggered");
@@ -25,7 +18,8 @@ export async function POST(request: NextRequest) {
     console.log("Received webhook payload:", JSON.stringify({
       campaignId: body.campaignId,
       batchIndex: body.batchIndex,
-      secretProvided: !!body.secret
+      secretProvided: !!body.secret,
+      timestamp: body.timestamp
     }));
     
     const { campaignId, batchIndex, secret } = body;
@@ -39,17 +33,6 @@ export async function POST(request: NextRequest) {
     if (!campaignId) {
       console.error("Missing campaignId in webhook payload");
       return NextResponse.json({ error: "Missing campaignId" }, { status: 400 });
-    }
-    
-    // Try to acquire a lock on the campaign
-    const lockAcquired = await acquireCampaignLock(campaignId);
-    
-    if (!lockAcquired) {
-      console.log(`Could not acquire lock for campaign ${campaignId}, it's likely being processed by another webhook`);
-      return NextResponse.json({
-        message: "Campaign is already being processed",
-        retry: true
-      }, { status: 409 });
     }
     
     // Check campaign status
@@ -80,12 +63,11 @@ export async function POST(request: NextRequest) {
     // Update last processed timestamp
     await prisma.campaign.update({
       where: { id: campaignId },
-      data: { lastProcessedAt: new Date() }
+      data: { 
+        lastProcessedAt: new Date(),
+        nextBatchIndex: batchIndex // Store current batch index for recovery
+      }
     });
-    
-    // Define timeout to ensure we don't exceed Vercel's limit
-    const startTime = Date.now();
-    const timeoutMs = 50000; // 50 seconds to be safe
     
     // Get pending recipients for this batch
     const recipients = await prisma.recipient.findMany({
@@ -109,18 +91,33 @@ export async function POST(request: NextRequest) {
         // Finalize campaign
         await finalizeCampaign(campaignId);
         
+        // Add headers for response
+        const headers = new Headers();
+        headers.append('X-Webhook-Processed', 'true');
+        headers.append('Cache-Control', 'no-store, no-cache');
+        
         return NextResponse.json({ 
           message: "Campaign completed", 
           status: "completed" 
-        }, { status: 200 });
+        }, { 
+          headers,
+          status: 200 
+        });
       } else {
         // There's an anomaly - some recipients might still be in other status
         console.log(`No pending recipients but campaign ${campaignId} not completed, possible anomaly`);
         
+        const headers = new Headers();
+        headers.append('X-Webhook-Processed', 'true');
+        headers.append('Cache-Control', 'no-store, no-cache');
+        
         return NextResponse.json({ 
           message: "No pending recipients but campaign not completed", 
           status: "anomaly" 
-        }, { status: 200 });
+        }, {
+          headers,
+          status: 200
+        });
       }
     }
     
@@ -137,12 +134,6 @@ export async function POST(request: NextRequest) {
     // Send email to each recipient in the batch
     const results = [];
     for (const recipient of recipients) {
-      // Check if we're approaching the timeout
-      if (Date.now() - startTime > timeoutMs) {
-        console.log(`Approaching timeout limit after processing ${results.length} recipients, will continue in next batch`);
-        break;
-      }
-      
       console.log(`Sending email to ${recipient.email}`);
       const result = await sendEmailWithRetry(campaign, smtpConfig, recipient);
       results.push({
@@ -153,7 +144,14 @@ export async function POST(request: NextRequest) {
       });
       
       // Add small delay between sends to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Check if we're approaching the timeout limit (leave 5 seconds buffer)
+      // This is important for Vercel Hobby Plan to avoid function timeouts
+      if (Date.now() - new Date().getTime() > 50000) { // 50 seconds
+        console.log('Approaching timeout limit, breaking batch processing');
+        break;
+      }
     }
     
     console.log(`Batch ${batchIndex} results: ${results.filter(r => r.success).length} succeeded, ${results.filter(r => !r.success).length} failed`);
@@ -179,21 +177,41 @@ export async function POST(request: NextRequest) {
       // Finalize campaign
       await finalizeCampaign(campaignId);
       
+      const headers = new Headers();
+      headers.append('X-Webhook-Processed', 'true');
+      headers.append('Cache-Control', 'no-store, no-cache');
+      
       return NextResponse.json({ 
         message: "Batch processed and campaign completed", 
         results,
         status: "completed"
-      }, { status: 200 });
+      }, {
+        headers,
+        status: 200
+      });
     } else {
       // Trigger next batch
       console.log(`Triggering next batch ${batchIndex + 1} for campaign ${campaignId}`);
-      await triggerProcessBatch(campaignId, batchIndex + 1);
+      
+      // For Vercel Hobby Plan: Use a short delay before triggering next batch
+      // This helps avoid rate limits and function timeouts
+      setTimeout(() => {
+        triggerProcessBatch(campaignId, batchIndex + 1)
+          .catch(err => console.error(`Error triggering next batch: ${err}`));
+      }, 1000);
+      
+      const headers = new Headers();
+      headers.append('X-Webhook-Processed', 'true');
+      headers.append('Cache-Control', 'no-store, no-cache');
       
       return NextResponse.json({ 
         message: `Batch ${batchIndex} processed, triggered next batch`, 
         results,
         nextBatch: batchIndex + 1
-      }, { status: 200 });
+      }, {
+        headers,
+        status: 200
+      });
     }
   } catch (error) {
     console.error("Error processing campaign batch:", error);
@@ -222,6 +240,7 @@ export async function POST(request: NextRequest) {
     // Add retry-after header on error
     const headers = new Headers();
     headers.append('Retry-After', '60');
+    headers.append('Cache-Control', 'no-store, no-cache');
     
     return NextResponse.json({ 
       error: error instanceof Error ? error.message : "Unknown error"

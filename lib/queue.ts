@@ -412,66 +412,6 @@ export async function startCampaignProcessing(campaignId: string): Promise<boole
   }
 }
 
-/**
- * Trigger next batch processing via webhook
- */
-export async function triggerProcessBatch(campaignId: string, batchIndex: number): Promise<boolean> {
-  try {
-    // Use absolute URL for webhook
-    const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
-    const webhookUrl = `${baseUrl}/api/webhooks/process-campaign`;
-    
-    console.log(`Triggering batch ${batchIndex} for campaign ${campaignId} at ${webhookUrl}`);
-    
-    // Add appropriate headers and timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-    
-    try {
-      const response = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'User-Agent': 'BrevoEmailApp/1.0',
-        },
-        body: JSON.stringify({
-          campaignId,
-          batchIndex,
-          secret: process.env.WEBHOOK_SECRET
-        }),
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      
-      // Log response status for debugging
-      console.log(`Webhook response status: ${response.status}`);
-      
-      if (!response.ok) {
-        const responseText = await response.text();
-        console.warn(`Webhook responded with non-OK status: ${response.status}, body: ${responseText}`);
-        return false;
-      }
-      
-      return true;
-    } catch (fetchError) {
-      console.error(`Error calling webhook: ${fetchError}`);
-      clearTimeout(timeoutId);
-      
-      // If webhook fails, retry after delay in production
-      if (process.env.NODE_ENV === 'production') {
-        setTimeout(() => {
-          triggerProcessBatch(campaignId, batchIndex).catch(console.error);
-        }, 5000); // Retry after 5 seconds
-      }
-      
-      return false;
-    }
-  } catch (error) {
-    console.error(`Error triggering batch processing for campaign ${campaignId}:`, error);
-    return false;
-  }
-}
 
 /**
  * Check if campaign is completed
@@ -688,6 +628,107 @@ export async function processBatchDirect(campaignId: string, batchIndex: number)
       },
     });
     
+    return false;
+  }
+}
+
+
+// lib/queue.ts (tambahkan fungsi ini)
+
+/**
+ * Fungsi untuk memeriksa dan memulai ulang webhook
+ * Berguna untuk Vercel Hobby Plan yang tidak mendukung cron jobs
+ */
+export async function checkAndResumeWebhooks() {
+  // Cek kampanye yang sedang berjalan tapi tidak ada aktivitas selama 5 menit
+  const activeCampaigns = await prisma.campaign.findMany({
+    where: {
+      status: 'processing',
+      lastProcessedAt: {
+        lt: new Date(Date.now() - 5 * 60 * 1000), // 5 menit yang lalu
+      },
+    },
+    select: {
+      id: true,
+      nextBatchIndex: true,
+    },
+  });
+  
+  // Restart webhook untuk kampanye yang aktif
+  for (const campaign of activeCampaigns) {
+    await triggerProcessBatch(campaign.id, campaign.nextBatchIndex || 0);
+  }
+}
+
+/**
+ * Modifikasi triggerProcessBatch untuk lebih tahan terhadap kegagalan
+ */
+export async function triggerProcessBatch(campaignId: string, batchIndex: number): Promise<boolean> {
+  try {
+    // Gunakan URL absolut untuk webhook
+    const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+    const webhookUrl = `${baseUrl}/api/webhooks/process-campaign`;
+    
+    console.log(`Triggering batch ${batchIndex} for campaign ${campaignId} at ${webhookUrl}`);
+    
+    // Tambahkan header dan timeout yang sesuai
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 detik timeout
+    
+    try {
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'BrevoEmailApp/1.0',
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+        },
+        body: JSON.stringify({
+          campaignId,
+          batchIndex,
+          secret: process.env.WEBHOOK_SECRET,
+          timestamp: Date.now() // Add timestamp to prevent caching
+        }),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      // Log status response untuk debugging
+      console.log(`Webhook response status: ${response.status}`);
+      
+      if (!response.ok) {
+        const responseText = await response.text();
+        console.warn(`Webhook responded with non-OK status: ${response.status}, body: ${responseText}`);
+        
+        // For Vercel Hobby Plan: If webhook fails, try direct processing
+        try {
+          await processBatchDirect(campaignId, batchIndex);
+          console.log(`Direct processing successful for campaign ${campaignId} batch ${batchIndex}`);
+          return true;
+        } catch (directError) {
+          console.error(`Direct processing failed: ${directError}`);
+          return false;
+        }
+      }
+      
+      return true;
+    } catch (fetchError) {
+      console.error(`Error calling webhook: ${fetchError}`);
+      clearTimeout(timeoutId);
+      
+      // For Vercel Hobby Plan: If webhook fails, try direct processing
+      try {
+        await processBatchDirect(campaignId, batchIndex);
+        console.log(`Direct processing successful after webhook failure for campaign ${campaignId}`);
+        return true;
+      } catch (directError) {
+        console.error(`Direct processing failed: ${directError}`);
+        return false;
+      }
+    }
+  } catch (error) {
+    console.error(`Error triggering batch processing for campaign ${campaignId}:`, error);
     return false;
   }
 }

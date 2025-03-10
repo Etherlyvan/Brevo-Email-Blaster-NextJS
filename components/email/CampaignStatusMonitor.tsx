@@ -2,8 +2,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { FiClock, FiRefreshCw, FiAlertTriangle, FiCalendar } from 'react-icons/fi';
 
 interface CampaignStatusProps {
   campaignId: string;
@@ -29,8 +27,6 @@ export default function CampaignStatusMonitor({
       completedAt: string | null;
       lastProcessedAt: string | null;
       lastError: string | null;
-      isScheduled: boolean;
-      scheduledFor: string | null;
     };
     progress: number;
     inProgress: boolean;
@@ -54,18 +50,42 @@ export default function CampaignStatusMonitor({
     fetchStatus();
     
     // Set up polling if autoRefresh is enabled
+    // Use more frequent polling to compensate for lack of cron jobs
     let interval: NodeJS.Timeout | null = null;
     
     if (autoRefresh) {
       interval = setInterval(() => {
         fetchStatus();
-      }, 5000); // Poll every 5 seconds
+      }, 10000); // Poll every 10 seconds for more responsive updates
     }
     
     return () => {
       if (interval) clearInterval(interval);
     };
   }, [campaignId, autoRefresh]);
+  
+  // Add effect to automatically check for stalled campaigns and restart if needed
+  useEffect(() => {
+    // Auto-restart stalled campaigns after confirmation
+    if (status?.isStalled) {
+      const timeSinceLastActivity = status.campaign.lastProcessedAt 
+        ? Math.round((Date.now() - new Date(status.campaign.lastProcessedAt).getTime()) / 60000) 
+        : 0;
+      
+      console.log(`Campaign appears stalled. Last activity was ${timeSinceLastActivity} minutes ago.`);
+      
+      // If stalled for more than 10 minutes, offer to restart automatically
+      if (timeSinceLastActivity > 10) {
+        const shouldRestart = window.confirm(
+          `This campaign appears to be stalled (no activity for ${timeSinceLastActivity} minutes). Would you like to restart processing?`
+        );
+        
+        if (shouldRestart) {
+          handleRestartCampaign();
+        }
+      }
+    }
+  }, [status?.isStalled]);
   
   const fetchStatus = async () => {
     try {
@@ -267,17 +287,6 @@ export default function CampaignStatusMonitor({
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">{campaign.name}</h2>
           <div className="flex flex-wrap gap-2">
-            {/* Edit Schedule button - only for draft, queued or scheduled campaigns */}
-            {(campaign.status === 'draft' || campaign.status === 'queued' || campaign.isScheduled) && (
-              <Link
-                href={`/dashboard/campaigns/edit/${campaign.id}/schedule`}
-                className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
-              >
-                <FiClock className="inline-block mr-2 w-4 h-4" />
-                {campaign.isScheduled ? 'Edit Schedule' : 'Schedule'}
-              </Link>
-            )}
-            
             {/* "Send Now" button for draft campaigns */}
             {campaign.status === 'draft' && (
               <button
@@ -325,7 +334,6 @@ export default function CampaignStatusMonitor({
               onClick={fetchStatus}
               className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
             >
-              <FiRefreshCw className="inline-block mr-2 w-4 h-4" />
               Refresh Status
             </button>
           </div>
@@ -341,7 +349,6 @@ export default function CampaignStatusMonitor({
                   campaign.status === 'failed' ? 'bg-red-100 text-red-800' :
                   campaign.status === 'partial' ? 'bg-yellow-100 text-yellow-800' :
                   campaign.status === 'processing' ? 'bg-blue-100 text-blue-800' :
-                  campaign.status === 'queued' ? 'bg-purple-100 text-purple-800' :
                   'bg-gray-100 text-gray-800'}
               `}>
                 {campaign.status.charAt(0).toUpperCase() + campaign.status.slice(1)}
@@ -355,12 +362,6 @@ export default function CampaignStatusMonitor({
                 </div>
               )}
             </div>
-            {campaign.isScheduled && campaign.scheduledFor && (
-              <div className="mt-2 text-xs text-purple-600 flex items-center">
-                <FiCalendar className="mr-1" />
-                Scheduled: {formatDate(campaign.scheduledFor)}
-              </div>
-            )}
           </div>
           
           <div className="bg-gray-50 p-4 rounded-md">
@@ -431,9 +432,7 @@ export default function CampaignStatusMonitor({
         {/* Last error */}
         {campaign.lastError && (
           <div className="mt-4 p-3 bg-red-50 text-red-700 rounded-md text-sm">
-            <div className="font-medium flex items-center">
-              <FiAlertTriangle className="mr-2" /> Last Error:
-            </div>
+            <div className="font-medium">Last Error:</div>
             <div>{campaign.lastError}</div>
           </div>
         )}

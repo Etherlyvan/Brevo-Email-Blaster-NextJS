@@ -1,21 +1,8 @@
-
 {
   "crons": [
     {
-      "path": "/api/cron/cleanup-images",
+      "path": "/api/cron/daily-maintenance",
       "schedule": "0 0 * * *"
-    },
-    {
-      "path": "/api/cron/reset-smtp-quotas",
-      "schedule": "0 0 * * *"
-    },
-    {
-      "path": "/api/cron/check-stalled-campaigns",
-      "schedule": "*/15 * * * *"
-    },
-    {
-      "path": "/api/cron/process-scheduled-campaigns",
-      "schedule": "*/5 * * * *"
     }
   ],
   "functions": {
@@ -32,9 +19,6 @@
       "maxDuration": 30
     },
     "app/api/email/process-now/[id]/route.ts": {
-      "maxDuration": 30
-    },
-    "app/api/email/route.ts": {
       "maxDuration": 30
     }
   },

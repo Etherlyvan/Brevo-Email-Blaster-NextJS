@@ -1,115 +1,116 @@
 // app/dashboard/page.tsx
 import { getServerSession } from 'next-auth/next';
+import Link from 'next/link';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import Header from '@/components/dashboard/Header';
+import CampaignsList from '@/components/campaigns/CampaignsList';
+import { FiClock, FiAlertTriangle } from 'react-icons/fi';
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
   
-  // Fetch user's stats
-  const [smtpCount, templateCount, campaignCount] = await Promise.all([
-    prisma.smtpConfig.count({ where: { userId: session?.user?.id } }),
-    prisma.emailTemplate.count({ where: { userId: session?.user?.id } }),
-    prisma.campaign.count({ where: { userId: session?.user?.id } }),
-  ]);
+  if (!session?.user?.id) {
+    return <div>Please sign in to access this page</div>;
+  }
+  
+  // Fetch data from database
+  const campaignsData = await prisma.campaign.findMany({
+    where: { 
+      userId: session.user.id,
+      isScheduled: false, // Only show non-scheduled campaigns
+    },
+    orderBy: { createdAt: 'desc' },
+    include: {
+      template: { select: { name: true } },
+    },
+  });
+  
+  // Convert Date objects to strings to match the expected interface
+  const campaigns = campaignsData.map(campaign => ({
+    ...campaign,
+    createdAt: campaign.createdAt.toISOString(),
+    updatedAt: campaign.updatedAt.toISOString(),
+    startedAt: campaign.startedAt ? campaign.startedAt.toISOString() : null,
+    completedAt: campaign.completedAt ? campaign.completedAt.toISOString() : null,
+    lastProcessedAt: campaign.lastProcessedAt ? campaign.lastProcessedAt.toISOString() : null,
+    scheduledFor: campaign.scheduledFor ? campaign.scheduledFor.toISOString() : null,
+  }));
+  
+  // Count scheduled campaigns
+  const scheduledCount = await prisma.campaign.count({
+    where: {
+      userId: session.user.id,
+      isScheduled: true,
+    },
+  });
+  
+  // Count stalled campaigns (no activity for more than 5 minutes)
+  const stalledCount = await prisma.campaign.count({
+    where: {
+      userId: session.user.id,
+      status: 'processing',
+      lastProcessedAt: {
+        lt: new Date(Date.now() - 5 * 60 * 1000), // 5 minutes ago
+      },
+    },
+  });
   
   return (
     <div>
       <Header title="Dashboard" />
       
       <div className="py-6 mx-auto max-w-7xl sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {/* SMTP Configurations Card */}
-            <div className="overflow-hidden bg-white rounded-lg shadow">
-              <div className="px-4 py-5 sm:p-6">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">
-                    SMTP Configurations
-                  </dt>
-                  <dd className="mt-1 text-3xl font-semibold text-gray-900">
-                    {smtpCount}
-                  </dd>
-                </dl>
-              </div>
+        <div className="px-4 sm:px-0">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg font-medium text-gray-900">Your Campaigns</h2>
+            <div className="flex space-x-3">
+              <Link
+                href="/dashboard/campaigns/scheduled"
+                className="flex items-center px-4 py-2 text-sm font-medium text-yellow-600 bg-yellow-100 rounded-md hover:bg-yellow-200 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2"
+              >
+                <FiClock className="w-4 h-4 mr-2" />
+                Scheduled ({scheduledCount})
+              </Link>
+              
+              {stalledCount > 0 && (
+                <Link
+                  href="/dashboard/campaigns/stalled"
+                  className="flex items-center px-4 py-2 text-sm font-medium text-red-600 bg-red-100 rounded-md hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                >
+                  <FiAlertTriangle className="w-4 h-4 mr-2" />
+                  Stalled ({stalledCount})
+                </Link>
+              )}
+              
+              <Link
+                href="/dashboard/campaigns/create"
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              >
+                Create Campaign
+              </Link>
             </div>
-            
-            {/* Email Templates Card */}
-            <div className="overflow-hidden bg-white rounded-lg shadow">
-              <div className="px-4 py-5 sm:p-6">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">
-                    Email Templates
-                  </dt>
-                  <dd className="mt-1 text-3xl font-semibold text-gray-900">
-                    {templateCount}
-                  </dd>
-                </dl>
+          </div>
+          
+          {/* Hobby Plan Warning Banner */}
+          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <FiAlertTriangle className="h-5 w-5 text-blue-400" aria-hidden="true" />
               </div>
-            </div>
-            
-            {/* Campaigns Card */}
-            <div className="overflow-hidden bg-white rounded-lg shadow">
-              <div className="px-4 py-5 sm:p-6">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">
-                    Campaigns
-                  </dt>
-                  <dd className="mt-1 text-3xl font-semibold text-gray-900">
-                    {campaignCount}
-                  </dd>
-                </dl>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-blue-800">Vercel Hobby Plan Notice</h3>
+                <div className="mt-2 text-sm text-blue-700">
+                  <p>
+                    Due to Vercel Hobby Plan limitations, scheduled campaigns require manual checking.
+                    Please visit the Scheduled Campaigns page regularly to ensure your emails are sent on time.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
           
-          <div className="mt-8">
-            <h2 className="text-lg font-medium text-gray-900">Getting Started</h2>
-            <div className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              <div className="relative p-6 bg-white border border-gray-200 rounded-lg shadow-sm">
-                <div className="flex items-center space-x-3">
-                  <div className="flex items-center justify-center flex-shrink-0 w-10 h-10 bg-blue-100 rounded-full">
-                    <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                  <h3 className="text-lg font-medium text-gray-900">1. Configure SMTP</h3>
-                </div>
-                <p className="mt-2 text-sm text-gray-500">
-                  Add your SMTP server details to start sending emails.
-                </p>
-              </div>
-              
-              <div className="relative p-6 bg-white border border-gray-200 rounded-lg shadow-sm">
-                <div className="flex items-center space-x-3">
-                  <div className="flex items-center justify-center flex-shrink-0 w-10 h-10 bg-blue-100 rounded-full">
-                    <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                  <h3 className="text-lg font-medium text-gray-900">2. Create Templates</h3>
-                </div>
-                <p className="mt-2 text-sm text-gray-500">
-                  Design email templates with dynamic parameters for personalization.
-                </p>
-              </div>
-              
-              <div className="relative p-6 bg-white border border-gray-200 rounded-lg shadow-sm">
-                <div className="flex items-center space-x-3">
-                  <div className="flex items-center justify-center flex-shrink-0 w-10 h-10 bg-blue-100 rounded-full">
-                    <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                  <h3 className="text-lg font-medium text-gray-900">3. Send Campaigns</h3>
-                </div>
-                <p className="mt-2 text-sm text-gray-500">
-                  Upload recipients from Excel and send personalized emails to your audience.
-                </p>
-              </div>
-            </div>
-          </div>
+          <CampaignsList initialCampaigns={campaigns} />
         </div>
       </div>
     </div>
