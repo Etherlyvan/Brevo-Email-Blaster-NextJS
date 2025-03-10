@@ -1,69 +1,68 @@
-// app/api/email/process-now/[id]/route.ts
-import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/db";
-import { startCampaignProcessing } from "@/lib/queue";
+// app/api/email/process-now/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/auth';
+import { prisma } from '@/lib/db';
 
 export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  const session = await getServerSession(authOptions);
-  
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  
-  const { id: campaignId } = params;
-  
+  request: NextRequest
+): Promise<NextResponse> {
   try {
-    console.log(`Processing campaign ${campaignId} now`);
+    // Verifikasi otentikasi
+    const session = await getServerSession(authOptions);
     
-    // Verify campaign belongs to user
-    const campaign = await prisma.campaign.findFirst({
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+    
+    // Dapatkan data dari body request
+    const data = await request.json();
+    const { id } = data;
+    
+    if (!id) {
+      return NextResponse.json(
+        { error: 'Campaign ID is required' },
+        { status: 400 }
+      );
+    }
+    
+    // Periksa apakah kampanye ada dan milik pengguna yang sedang login
+    const campaign = await prisma.campaign.findUnique({
       where: {
-        id: campaignId,
+        id,
         userId: session.user.id,
       },
     });
     
     if (!campaign) {
-      return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: 'Campaign not found' },
+        { status: 404 }
+      );
     }
     
-    // Only process if the campaign is in a valid state
-    if (!['draft', 'queued', 'processing'].includes(campaign.status)) {
-      return NextResponse.json({ 
-        error: `Cannot process campaign with status '${campaign.status}'` 
-      }, { status: 400 });
-    }
-    
-    // Update campaign to processing status
+    // Proses kampanye sekarang
+    // Contoh: Update status campaign menjadi 'processing'
     await prisma.campaign.update({
-      where: { id: campaignId },
+      where: { id },
       data: {
         status: 'processing',
-        startedAt: campaign.startedAt || new Date(),
-        lastProcessedAt: new Date(),
+        startedAt: new Date(),
       },
     });
     
-    // Start processing
-    const success = await startCampaignProcessing(campaignId);
+    // Anda mungkin ingin memanggil webhook atau fungsi lain untuk memproses email
+    // Misalnya: await processNextEmail(id);
     
-    if (!success) {
-      return NextResponse.json({ error: "Failed to start campaign processing" }, { status: 500 });
-    }
-    
-    return NextResponse.json({
-      success: true,
-      message: "Campaign processing started",
-    });
+    return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Error processing campaign:", error);
-    return NextResponse.json({ 
-      error: error instanceof Error ? error.message : "Failed to process campaign" 
-    }, { status: 500 });
+    console.error('Error processing campaign:', error);
+    return NextResponse.json(
+      { error: 'Failed to process campaign' },
+      { status: 500 }
+    );
   }
 }
