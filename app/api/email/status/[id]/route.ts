@@ -6,17 +6,18 @@ import { prisma } from "@/lib/db";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  const session = await getServerSession(authOptions);
-  
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  
-  const { id: campaignId } = params;
-  
+  { params }: { params: Promise<{ id: string }> }
+): Promise<NextResponse> {
   try {
+    // Await params untuk mendapatkan id
+    const { id: campaignId } = await params;
+    
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    
     console.log(`Fetching status for campaign ${campaignId}`);
     
     // Check if campaign exists and belongs to user
