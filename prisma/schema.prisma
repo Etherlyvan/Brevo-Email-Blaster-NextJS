@@ -172,6 +172,9 @@ model EmailLog {
   ipAddress     String?   // For tracking opens/clicks
 }
 
+// prisma/schema.prisma
+// Add these fields to the Campaign model
+
 model Campaign {
   id              String    @id @default(cuid())
   name            String
@@ -200,6 +203,10 @@ model Campaign {
   nextBatchIndex  Int       @default(0) // Track which batch to process next
   batchSize       Int       @default(20) // Number of emails to process in each batch
   lastError       String?   // Store the last error that occurred during processing
+  
+  // New fields for scheduling
+  scheduledFor    DateTime? // When the campaign is scheduled to run
+  isScheduled     Boolean   @default(false) // Flag to indicate if the campaign is scheduled
 }
 
 model CampaignTargetGroups {

@@ -5,26 +5,13 @@ import Link from 'next/link';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import Header from '@/components/dashboard/Header';
-import CampaignViewer from '@/components/email/CampaignViewer';
-import { Prisma } from '@prisma/client';
+import CampaignStatusMonitor from '@/components/email/CampaignStatusMonitor';
 
-type Params = Promise<{ id: string }>;
-
-// Helper function to safely parse JSON values
-function parseJsonValue(value: Prisma.JsonValue | null): Record<string, unknown> | null {
-  if (!value) return null;
-  if (typeof value === 'string') {
-    try {
-      return JSON.parse(value) as Record<string, unknown>;
-    } catch (e) {
-      console.error('Error parsing JSON string:', e);
-      return {};
-    }
-  }
-  return value as Record<string, unknown>;
-}
-
-export default async function CampaignDetailPage({ params }: { params: Params }) {
+export default async function CampaignDetailPage({ 
+  params 
+}: { 
+  params: Promise<{ id: string }> 
+}) {
   const { id } = await params;
   const session = await getServerSession(authOptions);
   
@@ -33,50 +20,27 @@ export default async function CampaignDetailPage({ params }: { params: Params })
   }
   
   // Fetch campaign with related data
-  const campaignData = await prisma.campaign.findUnique({
+  const campaign = await prisma.campaign.findUnique({
     where: {
       id: id,
       userId: session.user.id,
     },
     include: {
       template: true,
-      recipients: {
-        take: 100, // Limit to prevent loading too many records
+      smtpConfig: {
+        select: {
+          id: true,
+          name: true,
+          host: true,
+          fromEmail: true,
+          fromName: true,
+        },
       },
     },
   });
   
-  if (!campaignData) {
+  if (!campaign) {
     notFound();
-  }
-  
-  // Process the campaign data to ensure proper typing
-  const campaign = {
-    ...campaignData,
-    // Parse parameterValues from JsonValue to proper Record<string, unknown>
-    parameterValues: parseJsonValue(campaignData.parameterValues),
-    // Process each recipient to ensure metadata is properly typed
-    recipients: campaignData.recipients.map(recipient => ({
-      ...recipient,
-      metadata: parseJsonValue(recipient.metadata)
-    }))
-  };
-  
-  // Get SMTP configuration if available
-  let smtpConfig = null;
-  if (campaign.smtpConfigId) {
-    smtpConfig = await prisma.smtpConfig.findUnique({
-      where: {
-        id: campaign.smtpConfigId,
-      },
-      select: {
-        id: true,
-        name: true,
-        host: true,
-        fromEmail: true,
-        fromName: true,
-      },
-    });
   }
   
   return (
@@ -85,19 +49,45 @@ export default async function CampaignDetailPage({ params }: { params: Params })
       
       <div className="py-6 mx-auto max-w-7xl sm:px-6 lg:px-8">
         <div className="px-4 sm:px-0">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-medium text-gray-900">{campaign.name}</h2>
-            <div className="flex space-x-3">
-              <Link
-                href="/dashboard/campaigns"
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-              >
-                Back to Campaigns
-              </Link>
-            </div>
+          <div className="mb-6">
+            <Link
+              href="/dashboard/campaigns"
+              className="text-blue-600 hover:text-blue-500"
+            >
+              ← Back to Campaigns
+            </Link>
           </div>
           
-          <CampaignViewer campaign={campaign} smtpConfig={smtpConfig} />
+          <CampaignStatusMonitor campaignId={campaign.id} />
+          
+          <div className="mt-8 bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+            <h3 className="text-lg font-medium mb-4">Campaign Details</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <h4 className="text-sm font-medium text-gray-500">Template</h4>
+                <p className="mt-1">{campaign.template.name}</p>
+                <p className="mt-1 text-sm text-gray-500">Subject: {campaign.template.subject}</p>
+              </div>
+              
+              <div>
+                <h4 className="text-sm font-medium text-gray-500">SMTP Configuration</h4>
+                <p className="mt-1">{campaign.smtpConfig?.name || 'N/A'}</p>
+                <p className="mt-1 text-sm text-gray-500">
+                  From: {campaign.smtpConfig?.fromName} &lt;{campaign.smtpConfig?.fromEmail}&gt;
+                </p>
+              </div>
+            </div>
+            
+            <div className="mt-6">
+              <h4 className="text-sm font-medium text-gray-500">Email Preview</h4>
+              <div className="mt-2 p-4 border border-gray-200 rounded-md bg-gray-50">
+                <div className="prose prose-sm max-h-64 overflow-y-auto">
+                  <div dangerouslySetInnerHTML={{ __html: campaign.template.htmlContent }} />
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

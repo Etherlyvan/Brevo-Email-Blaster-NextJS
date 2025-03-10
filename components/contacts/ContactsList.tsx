@@ -6,48 +6,49 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { FiEdit2, FiTrash2, FiMail, FiSearch, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 
+interface ContactGroup {
+  id: string;
+  name: string;
+}
+
 interface Contact {
   id: string;
   email: string;
   name: string | null;
-  groups: Array<{
-    id: string;
-    name: string;
-  }>;
+  groups: ContactGroup[];
   createdAt: string;
 }
 
-interface PaginationData {
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
+interface ContactsListProps {
+  initialContacts: Contact[];
+  totalContacts: number;
 }
 
-export default function ContactsList() {
+export default function ContactsList({ initialContacts, totalContacts }: ContactsListProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [pagination, setPagination] = useState<PaginationData>({
-    total: 0,
-    page: 1,
+  const [contacts, setContacts] = useState<Contact[]>(initialContacts);
+  const [pagination, setPagination] = useState({
+    total: totalContacts,
+    page: parseInt(searchParams?.get('page') || '1'),
     limit: 20,
-    totalPages: 0,
+    totalPages: Math.ceil(totalContacts / 20)
   });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState(searchParams?.get('search') || '');
   const [selectedGroupId, setSelectedGroupId] = useState(searchParams?.get('groupId') || '');
   const [groups, setGroups] = useState<Array<{ id: string; name: string; contactCount: number }>>([]);
   
-  // Get the current page from URL or default to 1
-  const currentPage = parseInt(searchParams?.get('page') || '1');
-  
+  // Fetch contacts when page, search, or group filter changes
   useEffect(() => {
     fetchGroups();
-    fetchContacts(currentPage, search, selectedGroupId);
-  }, [currentPage, searchParams]);
+    // Only fetch if we're navigating away from the first page or applying filters
+    if (pagination.page > 1 || search || selectedGroupId) {
+      fetchContacts(pagination.page, search, selectedGroupId);
+    }
+  }, [pagination.page, searchParams]);
   
   const fetchGroups = async () => {
     try {
@@ -122,8 +123,14 @@ export default function ContactsList() {
         throw new Error('Failed to delete contact');
       }
       
-      // Refresh the contacts list
-      fetchContacts(currentPage, search, selectedGroupId);
+      // Remove from local state
+      setContacts(contacts.filter(c => c.id !== contactId));
+      // Update total count
+      setPagination(prev => ({
+        ...prev,
+        total: prev.total - 1,
+        totalPages: Math.ceil((prev.total - 1) / prev.limit)
+      }));
     } catch (error) {
       alert(error instanceof Error ? error.message : 'An error occurred');
       console.error('Error deleting contact:', error);
@@ -232,7 +239,7 @@ export default function ContactsList() {
       <div className="p-4 text-red-700 bg-red-100 rounded-md">
         <p>{error}</p>
         <button 
-          onClick={() => fetchContacts(currentPage, search, selectedGroupId)}
+          onClick={() => fetchContacts(pagination.page, search, selectedGroupId)}
           className="px-4 py-2 mt-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700"
         >
           Try Again

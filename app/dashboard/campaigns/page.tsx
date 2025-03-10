@@ -4,15 +4,31 @@ import Link from 'next/link';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import Header from '@/components/dashboard/Header';
+import { FiClock } from 'react-icons/fi';
 
 export default async function CampaignsPage() {
   const session = await getServerSession(authOptions);
   
+  if (!session?.user?.id) {
+    return <div>Please sign in to access this page</div>;
+  }
+  
   const campaigns = await prisma.campaign.findMany({
-    where: { userId: session?.user?.id },
+    where: { 
+      userId: session.user.id,
+      isScheduled: false, // Only show non-scheduled campaigns
+    },
     orderBy: { createdAt: 'desc' },
     include: {
       template: { select: { name: true } },
+    },
+  });
+  
+  // Count scheduled campaigns
+  const scheduledCount = await prisma.campaign.count({
+    where: {
+      userId: session.user.id,
+      isScheduled: true,
     },
   });
   
@@ -24,12 +40,21 @@ export default async function CampaignsPage() {
         <div className="px-4 sm:px-0">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-lg font-medium text-gray-900">Your Campaigns</h2>
-            <Link
-              href="/dashboard/campaigns/create"
-              className="px-4 py-2 text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
-              Create Campaign
-            </Link>
+            <div className="flex space-x-3">
+              <Link
+                href="/dashboard/campaigns/scheduled"
+                className="flex items-center px-4 py-2 text-sm font-medium text-yellow-600 bg-yellow-100 rounded-md hover:bg-yellow-200 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2"
+              >
+                <FiClock className="w-4 h-4 mr-2" />
+                Scheduled ({scheduledCount})
+              </Link>
+              <Link
+                href="/dashboard/campaigns/create"
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              >
+                Create Campaign
+              </Link>
+            </div>
           </div>
           
           {campaigns.length === 0 ? (
@@ -67,6 +92,14 @@ export default async function CampaignsPage() {
                           >
                             View Details
                           </Link>
+                          {(campaign.status === 'draft' || campaign.status === 'queued') && (
+                            <Link
+                              href={`/dashboard/campaigns/edit/${campaign.id}/schedule`}
+                              className="ml-4 font-medium text-purple-600 hover:text-purple-500"
+                            >
+                              Schedule
+                            </Link>
+                          )}
                         </div>
                       </div>
                       <div className="mt-2 sm:flex sm:justify-between">
@@ -86,22 +119,6 @@ export default async function CampaignsPage() {
                               />
                             </svg>
                             Template: {campaign.template.name}
-                          </p>
-                          <p className="flex items-center mt-2 text-sm text-gray-500 sm:mt-0 sm:ml-6">
-                            <svg
-                              className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth="2"
-                                d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                              />
-                            </svg>
-                            Recipients: {campaign.recipientCount}
                           </p>
                         </div>
                         <div className="flex items-center mt-2 text-sm text-gray-500 sm:mt-0">

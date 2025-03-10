@@ -12,7 +12,7 @@ interface RecipientData {
 }
 
 interface ExcelFileUploaderProps {
-  onUpload: (recipients: RecipientData[], file: File) => void;
+  onUpload: (recipients: Array<Record<string, unknown>>, file: File) => void;
   parameters?: string[];
 }
 
@@ -84,12 +84,7 @@ export default function ExcelFileUploader({ onUpload, parameters = [] }: ExcelFi
 
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700">
-        Upload Recipients Excel File
-      </label>
-      
       <input
-        // components/email/ExcelFileUploader.tsx (continued)
         type="file"
         ref={fileInputRef}
         accept=".xlsx,.xls,.csv"

@@ -8,17 +8,14 @@ interface FallbackAvatarProps {
 }
 
 export default function FallbackAvatar({ name, size = 32, className = '' }: FallbackAvatarProps) {
-  // Get the first letter of the name or use 'U' as default
-  const initial = name?.charAt(0)?.toUpperCase() || 'U';
-  
-  // Generate a consistent color based on the name
-  const getColorFromName = (name: string) => {
+  // Generate deterministic color based on user name
+  const getColorFromName = (name: string): string => {
     const colors = [
       'bg-blue-600', 'bg-green-600', 'bg-yellow-500', 
       'bg-red-600', 'bg-purple-600', 'bg-pink-600'
     ];
     
-    // Simple hash function to get a consistent index
+    // Simple hash function to get consistent index
     let hash = 0;
     for (let i = 0; i < name.length; i++) {
       hash = name.charCodeAt(i) + ((hash << 5) - hash);
@@ -29,6 +26,10 @@ export default function FallbackAvatar({ name, size = 32, className = '' }: Fall
     return colors[index];
   };
   
+  // Get first letter of name or default to 'U'
+  const initial = name?.charAt(0)?.toUpperCase() || 'U';
+  
+  // Get color class based on name
   const colorClass = name ? getColorFromName(name) : 'bg-blue-600';
   
   return (

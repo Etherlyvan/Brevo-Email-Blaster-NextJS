@@ -8,6 +8,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY!
 );
 
+// Define a proper type for the cache result
 /**
  * Cache a user's profile image to avoid 429 errors from Google
  */
@@ -92,6 +93,7 @@ async function fetchWithRetry(
           // Add a random cache buster to avoid cached 429 responses
           'Cache-Control': 'no-cache',
           'Pragma': 'no-cache',
+          'X-Random': Math.random().toString(),
         }
       });
       
@@ -149,8 +151,16 @@ export async function cleanupUnusedImages(): Promise<{removed: number, errors: n
     
     // Extract the file paths from the URLs
     const usedFilePaths = usedImagePaths.map(url => {
-      const parts = url.split('/');
-      return parts[parts.length - 1];
+      try {
+        const urlObj = new URL(url);
+        const pathParts = urlObj.pathname.split('/');
+        return pathParts[pathParts.length - 1];
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      } catch (e) {
+        // If URL parsing fails, just use the whole string
+        const parts = url.split('/');
+        return parts[parts.length - 1];
+      }
     });
     
     // List all files in the storage bucket
@@ -176,6 +186,15 @@ export async function cleanupUnusedImages(): Promise<{removed: number, errors: n
     let errors = 0;
     
     for (const file of unusedFiles) {
+      // Skip files less than 24 hours old to avoid race conditions
+      const fileCreationTime = new Date(file.created_at || Date.now()).getTime();
+      const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
+      
+      if (fileCreationTime > oneDayAgo) {
+        console.log(`Skipping recently created file: ${file.name}`);
+        continue;
+      }
+      
       const { error: deleteError } = await supabase.storage
         .from('profile-images')
         .remove([`user-images/${file.name}`]);

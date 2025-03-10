@@ -1,4 +1,3 @@
-// lib/auth.ts
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
@@ -27,6 +26,15 @@ declare module "next-auth/jwt" {
   }
 }
 
+// Define a type for user data
+interface UserWithCachedImage {
+  id: string;
+  email: string;
+  name?: string | null;
+  image?: string | null;
+  cachedImagePath?: string | null;
+}
+
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   session: {
@@ -40,6 +48,13 @@ export const authOptions: NextAuthOptions = {
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      authorization: {
+        params: {
+          prompt: "consent",
+          access_type: "offline",
+          response_type: "code"
+        }
+      }
     }),
     CredentialsProvider({
       name: "Credentials",
@@ -58,7 +73,6 @@ export const authOptions: NextAuthOptions = {
           },
         });
 
-        // Use optional chaining instead of the logical AND
         if (!user?.password) {
           return null;
         }
@@ -83,30 +97,27 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    // Removed unused 'account' parameter
     async jwt({ token, user }) {
       // Initial sign in
       if (user) {
         token.id = user.id;
-        // Use proper typing instead of 'any'
-        token.cachedImagePath = (user as { cachedImagePath?: string | null }).cachedImagePath || null;
+        token.cachedImagePath = (user as UserWithCachedImage).cachedImagePath ?? null;
       }
       
       return token;
     },
     async session({ session, token }) {
-      if (token && session.user) {
-        session.user.id = token.id as string;
-        session.user.cachedImagePath = token.cachedImagePath as string | null;
+      if (token?.id && session.user) {
+        session.user.id = token.id;
+        session.user.cachedImagePath = token.cachedImagePath ?? null;
       }
       return session;
     },
   },
   events: {
-    // Removed unused 'profile' parameter
-    async signIn({ user, account }) {
+    async signIn({ user, account: _account }) {
       // If this is a Google sign-in with a profile image
-      if (account?.provider === 'google' && user.id && user.image) {
+      if (_account?.provider === 'google' && user.id && user.image) {
         try {
           // Cache the profile image to avoid 429 errors
           const cachedImageUrl = await cacheUserImage(user.id, user.image);

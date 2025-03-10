@@ -1,13 +1,12 @@
 // app/api/email/status/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
-import { prisma } from "@/lib/db";
 import { authOptions } from "@/lib/auth";
-import { getCampaignStatus } from "@/lib/queue";
+import { prisma } from "@/lib/db";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   const session = await getServerSession(authOptions);
   
@@ -15,10 +14,11 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   
-  // Await the params promise to get the actual parameters
-  const { id: campaignId } = await params;
+  const { id: campaignId } = params;
   
   try {
+    console.log(`Fetching status for campaign ${campaignId}`);
+    
     // Check if campaign exists and belongs to user
     const campaign = await prisma.campaign.findFirst({
       where: {
@@ -30,12 +30,17 @@ export async function GET(
         name: true,
         status: true,
         recipientCount: true,
+        processedCount: true,
         successCount: true,
         failCount: true,
         openCount: true,
         clickCount: true,
         startedAt: true,
         completedAt: true,
+        lastProcessedAt: true,
+        lastError: true,
+        isScheduled: true,
+        scheduledFor: true,
       },
     });
     
@@ -43,11 +48,12 @@ export async function GET(
       return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
     }
     
-    // Get real-time status
-    const queueStatus = await getCampaignStatus(campaignId);
+    // Calculate progress percentage
+    const progress = campaign.recipientCount > 0
+      ? Math.round((campaign.processedCount / campaign.recipientCount) * 100)
+      : 0;
     
-    // Get recent errors - without using updatedAt for ordering
-    // Use createdAt instead, which should definitely be in the schema
+    // Get recent errors for better debugging
     const recentErrors = await prisma.recipient.findMany({
       where: {
         campaignId,
@@ -56,18 +62,31 @@ export async function GET(
       select: {
         email: true,
         errorMessage: true,
+        updatedAt: true,
+      },
+      orderBy: {
+        updatedAt: 'desc',
       },
       take: 5,
-      // Alternative approach - use a different field or remove the ordering
-      orderBy: {
-        createdAt: 'desc'
-      },
     });
+    
+    // Check if campaign is stalled (no activity for more than 5 minutes)
+    const isStalled = campaign.status === 'processing' && 
+                     campaign.lastProcessedAt && 
+                     (new Date().getTime() - new Date(campaign.lastProcessedAt).getTime() > 5 * 60 * 1000);
+    
+    // Check for stuck campaigns - in processing state but no activity for a long time
+    if (isStalled && process.env.NODE_ENV === 'development') {
+      console.log(`Campaign ${campaignId} appears to be stalled - last activity at ${campaign.lastProcessedAt}`);
+    }
     
     return NextResponse.json({
       campaign,
-      queue: queueStatus,
+      progress,
+      isStalled,
       recentErrors,
+      inProgress: campaign.status === 'processing' || campaign.status === 'queued',
+      isComplete: ['sent', 'failed', 'partial'].includes(campaign.status),
     });
   } catch (error) {
     console.error("Error fetching campaign status:", error);
