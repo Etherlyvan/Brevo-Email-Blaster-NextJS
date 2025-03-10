@@ -6,11 +6,15 @@ import { prisma } from '@/lib/db';
 import Header from '@/components/dashboard/Header';
 import CampaignScheduleForm from '@/components/campaigns/CampaignScheduleForm';
 
+interface PageProps {
+  params: {
+    id: string;
+  };
+}
+
 export default async function EditCampaignSchedulePage({ 
   params 
-}: { 
-  params: { id: string } 
-}) {
+}: PageProps) {
   const session = await getServerSession(authOptions);
   
   if (!session?.user?.id) {
