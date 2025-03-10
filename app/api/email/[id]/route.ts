@@ -6,9 +6,12 @@ import { prisma } from '@/lib/db';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+  { params }: { params: Promise<{ id: string }> }
+): Promise<NextResponse> {
   try {
+    // Await params untuk mendapatkan id
+    const { id } = await params;
+    
     // Verifikasi otentikasi
     const session = await getServerSession(authOptions);
     
@@ -19,11 +22,7 @@ export async function GET(
       );
     }
     
-    const id = params.id;
-    
     // Dapatkan kampanye dari database
-    // Perhatikan: Kita gunakan 'select' daripada 'include' untuk template
-    // untuk menentukan dengan tepat field mana yang ingin kita ambil
     const campaign = await prisma.campaign.findUnique({
       where: {
         id,
@@ -51,12 +50,14 @@ export async function GET(
   }
 }
 
-// Handler PUT dan DELETE tetap sama seperti sebelumnya
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+  { params }: { params: Promise<{ id: string }> }
+): Promise<NextResponse> {
   try {
+    // Await params untuk mendapatkan id
+    const { id } = await params;
+    
     const session = await getServerSession(authOptions);
     
     if (!session?.user?.id) {
@@ -66,7 +67,6 @@ export async function PUT(
       );
     }
     
-    const id = params.id;
     const data = await request.json();
     
     // Perbarui kampanye di database
@@ -90,9 +90,12 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+  { params }: { params: Promise<{ id: string }> }
+): Promise<NextResponse> {
   try {
+    // Await params untuk mendapatkan id
+    const { id } = await params;
+    
     const session = await getServerSession(authOptions);
     
     if (!session?.user?.id) {
@@ -101,8 +104,6 @@ export async function DELETE(
         { status: 401 }
       );
     }
-    
-    const id = params.id;
     
     // Hapus kampanye dari database
     await prisma.campaign.delete({
