@@ -1,4 +1,8 @@
 {
+  "buildCommand": "npm run vercel-build",
+  "installCommand": "npm install",
+  "framework": "nextjs",
+
   "crons": [
     {
       "path": "/api/cron/daily-maintenance",
@@ -24,11 +28,11 @@
   },
   "headers": [
     {
-      "source": "/api/webhooks/(.*)",
+      "source": "/(.*)",
       "headers": [
         {
           "key": "Cache-Control",
-          "value": "no-store, no-cache"
+          "value": "public, max-age=0, must-revalidate"
         }
       ]
     },

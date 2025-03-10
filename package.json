@@ -3,14 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "cross-env NODE_OPTIONS=--no-deprecation next dev",
-    "build": "prisma generate && cross-env NODE_OPTIONS=--no-deprecation next build",
-    "start": "cross-env NODE_OPTIONS=--no-deprecation next start",
+    "dev": "cross-env NODE_OPTIONS='--no-deprecation' next dev",
+    "build": "prisma generate && cross-env NODE_OPTIONS='--no-deprecation --max-old-space-size=4096' next build",
+    "start": "cross-env NODE_OPTIONS='--no-deprecation' next start",
     "lint": "next lint",
     "postinstall": "prisma generate",
     "db:push": "prisma db push",
     "prisma:studio": "prisma studio",
-    "vercel-build": "prisma generate && next build"
+    "vercel-build": "prisma generate && NODE_OPTIONS='--no-deprecation --max-old-space-size=4096' next build"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.8.0",

@@ -1,15 +1,7 @@
 // app/layout.tsx
 import './globals.css';
-import { Inter } from 'next/font/google';
 import { NextAuthProvider } from './providers';
 import ImagePreloader from '@/components/ImagePreloader';
-
-// Gunakan subset Latin saja untuk mengurangi kompleksitas
-const inter = Inter({ 
-  subsets: ['latin'],
-  display: 'swap',
-  variable: '--font-inter',
-});
 
 export const metadata = {
   title: 'Brevo Email App',
@@ -22,8 +14,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={inter.variable}>
-      <body className={inter.className}>
+    <html lang="en">
+      <body className="font-sans">
         <NextAuthProvider>
           <ImagePreloader />
           {children}
