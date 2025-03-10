@@ -7,14 +7,17 @@ import Header from '@/components/dashboard/Header';
 import CampaignScheduleForm from '@/components/campaigns/CampaignScheduleForm';
 
 interface PageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 export default async function EditCampaignSchedulePage({ 
   params 
 }: PageProps) {
+  // Await params untuk mendapatkan id
+  const { id } = await params;
+  
   const session = await getServerSession(authOptions);
   
   if (!session?.user?.id) {
@@ -24,7 +27,7 @@ export default async function EditCampaignSchedulePage({
   // Fetch campaign data
   const campaign = await prisma.campaign.findFirst({
     where: {
-      id: params.id,
+      id,
       userId: session.user.id,
     },
   });
@@ -35,7 +38,7 @@ export default async function EditCampaignSchedulePage({
   
   // Only allow editing schedule for draft, queued, or scheduled campaigns
   if (!['draft', 'queued'].includes(campaign.status) && !campaign.isScheduled) {
-    redirect(`/dashboard/campaigns/${params.id}`);
+    redirect(`/dashboard/campaigns/${id}`);
   }
   
   return (
