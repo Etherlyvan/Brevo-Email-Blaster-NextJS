@@ -7,20 +7,21 @@ import { startCampaignProcessing } from "@/lib/queue";
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  const session = await getServerSession(authOptions);
-  
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { 
-      status: 401,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-  
-  const { id: campaignId } = params;
-  
+  { params }: { params: Promise<{ id: string }> }
+): Promise<NextResponse> {
   try {
+    // Await params untuk mendapatkan id
+    const { id: campaignId } = await params;
+    
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { 
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
     const data = await request.json();
     const { isScheduled, scheduledFor, sendImmediately } = data;
     
@@ -133,20 +134,21 @@ export async function PUT(
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  const session = await getServerSession(authOptions);
-  
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { 
-      status: 401,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-  
-  const { id: campaignId } = params;
-  
+  { params }: { params: Promise<{ id: string }> }
+): Promise<NextResponse> {
   try {
+    // Await params untuk mendapatkan id
+    const { id: campaignId } = await params;
+    
+    const session = await getServerSession(authOptions);
+    
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { 
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
     // Get campaign scheduling details
     const campaign = await prisma.campaign.findFirst({
       where: {
